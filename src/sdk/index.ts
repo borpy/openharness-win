@@ -17,7 +17,8 @@
 import type { Provider } from "../providers/base.js";
 import type { Tools } from "../Tool.js";
 import type { StreamEvent } from "../types/events.js";
-import type { PermissionMode } from "../types/permissions.js";
+import type { Message } from "../types/message.js";
+import type { AskUserFn, PermissionMode } from "../types/permissions.js";
 
 // ── Types ──
 
@@ -40,6 +41,17 @@ export type AgentConfig = {
   maxTurns?: number;
   /** Working directory */
   cwd?: string;
+  /** Interactive permission callback. When set, gets invoked for tools that
+   *  need approval and no `permissionRequest` hook decided. Used by the ACP
+   *  bridge to route permission prompts to the editor over JSON-RPC. */
+  askUser?: AskUserFn;
+  /** Interactive Q&A callback for the `AskUserQuestion` tool. Same routing
+   *  story as `askUser` — set when the caller can show a UI prompt. */
+  askUserQuestion?: (question: string, options?: string[]) => Promise<string>;
+  /** Prior conversation history to seed the next run/stream call with. Used
+   *  by ACP `session/load` to restore a persisted session, and by any
+   *  programmatic embedder that needs to resume a conversation. */
+  priorMessages?: Message[];
 };
 
 export type AgentResult = {
@@ -126,6 +138,8 @@ export class Agent {
       permissionMode: this.config.permissionMode!,
       model: this.config.model,
       maxTurns: this.config.maxTurns,
+      ...(this.config.askUser ? { askUser: this.config.askUser } : {}),
+      ...(this.config.askUserQuestion ? { askUserQuestion: this.config.askUserQuestion } : {}),
     };
 
     let text = "";
@@ -136,7 +150,7 @@ export class Agent {
     let turns = 0;
 
     try {
-      for await (const event of query(prompt, config)) {
+      for await (const event of query(prompt, config, this.config.priorMessages)) {
         switch (event.type) {
           case "text_delta":
             text += event.content;
@@ -192,9 +206,11 @@ export class Agent {
       permissionMode: this.config.permissionMode!,
       model: this.config.model,
       maxTurns: this.config.maxTurns,
+      ...(this.config.askUser ? { askUser: this.config.askUser } : {}),
+      ...(this.config.askUserQuestion ? { askUserQuestion: this.config.askUserQuestion } : {}),
     };
 
-    yield* query(prompt, config);
+    yield* query(prompt, config, this.config.priorMessages);
   }
 
   /** Stop the agent (cleanup) */

@@ -1,5 +1,91 @@
 # Changelog
 
+## 2.47.0 (2026-05-11) — ACP `session/load` capability
+
+Last of the four ACP-server gaps. `oh acp` now advertises `loadSession: true` and implements the `session/load` handler — editors can resume a prior session by reusing its sessionId, and the agent restores the full message history from OH's existing `~/.oh/sessions/` store via the `priorMessages` SDK config. **All ACP tests pass** (38 in `src/acp/agent.test.ts`; +3 new); typecheck clean.
+
+### Why this matters strategically
+v2.44–v2.46 closed the live-call gaps (permission, cost, rate-limit). v2.47 closes the session-restart gap: an editor user who closes Zed and reopens it the next day can pick up exactly where they left off, with the full conversation history intact. This was the last item on the ACP-side checklist before the upstream `formulahendry/vscode-acp` PR can submit. After v2.47, OH has the production-ready ACP server surface that the audit's A4 plan needs.
+
+### Added
+- **`session/load` handler** in `createAcpAgent` (`src/acp/agent.ts`). Reads the persisted session via `loadSession(id, dir?)` (grep-first hit: already shipped in `harness/session.ts:89` and used 8+ places in the REPL), constructs a fresh `OhAgent` seeded with `priorMessages: persisted.messages`, and registers it under the original sessionId. Honors the per-call `cwd` from the ACP request when provided.
+- **`AgentConfig.priorMessages`** in the SDK (`src/sdk/index.ts`) — the `Agent` class now forwards prior conversation history as the third argument to `query()`. This was already the existing seam: `query(userMessage, config, existingMessages = [])` had been programmable since the REPL's resume flow was wired; this PR just exposes the door through the public SDK type.
+- **`AcpAgentConfig.sessionDir`** — testability override for the session-persistence directory. Production callers leave it unset (falls through to `~/.oh/sessions`); tests point at a tmp dir.
+
+### Changed
+- **`agentCapabilities.loadSession`** flipped from `false` → `true` in the `initialize` response. Editors that advertise their own loadSession-aware code paths (Zed, JetBrains, Cline, formulahendry/vscode-acp post-PR) will now use them with OH.
+- **The existing `initialize` lock-in test** updated to assert the new `true` value.
+
+### Internal
+- 3 new tests in `src/acp/agent.test.ts`: missing-sessionId rejects with clear error, persisted-session loads succeed idempotently, per-call `cwd` is accepted without throwing.
+
+### After v2.47
+Phase 2 (the audit's A4 final step) is the upstream PR to https://github.com/formulahendry/vscode-acp adding openHarness as the 12th pre-configured agent. With all four ACP-server gaps closed, the extension launches with parity rather than caveats. JetBrains/Cline/OpenCode users also benefit immediately — those clients already speak ACP and will pick up the new capabilities on their next session.
+
+## 2.46.0 (2026-05-11) — ACP `rate_limited` surface
+
+Third of the four ACP-server gaps. `rate_limited` events now flow through `bridgeStreamEventToAcp` as an italicized `agent_message_chunk` with structured retry info on `SessionNotification._meta`, replacing the previous "stalled spinner with no UI signal" experience editors saw during provider 429 backoff. **All ACP tests pass** (35 in `src/acp/agent.test.ts`; +1 net new; the existing no-op assertion drops one event since rate_limited is now bridged); typecheck clean.
+
+### Why this matters strategically
+Without this, editor users couldn't tell the difference between "the agent is thinking" and "the agent is rate-limited and waiting to retry." For anyone hitting their Anthropic/OpenAI tier limits, that's a meaningful UX gap — they'd cancel and re-prompt thinking the agent was stuck, wasting their backoff window. The structured `_meta.oh_retry_in_seconds` also lets editor extensions surface a countdown or schedule the next retry in a status panel.
+
+### Added
+- **`rate_limited` translation** in `bridgeStreamEventToAcp` (`src/acp/agent.ts`). Emits `session/update` with `agent_message_chunk` carrying an italicized markdown notice ("_Rate-limited by provider — retrying in Ns (attempt M)…_") plus `_meta` containing `oh_event: "rate_limited"`, `oh_retry_in_seconds`, and `oh_attempt`.
+
+### Changed
+- **`bridgeStreamEventToAcp` return type** widened to allow optional top-level `_meta` per the ACP `SessionNotification` schema. Existing translations (text/thinking/tool_call/tool_call_update) don't set it — only the new rate_limited path does.
+- **The "no-op events" lock-in test** in `agent.test.ts` dropped `rate_limited` from its event list (the existing 6 still return `[]`).
+
+### Internal
+- 1 new lock-in test asserts the exact shape of the rate_limited translation (italicized text + structured _meta).
+
+### Coming in v2.47
+- `loadSession` capability + handler, the last of the four ACP-server gaps. After v2.47 the upstream PR to formulahendry/vscode-acp can submit.
+
+## 2.45.0 (2026-05-11) — ACP `usage_update` cost surface
+
+Second of the four ACP-server gaps. Each `oh acp` session now accumulates per-call cost into a running total and emits an ACP `usage_update` SessionUpdate after every `cost_update` event from the underlying agent. Editors get a first-class channel for context-window and cost display — cumulative spend, current token usage, and context window size all flow through the SDK's stable update notification. **All ACP tests pass** (34 in `src/acp/agent.test.ts`; +5 new); typecheck clean.
+
+### Why this matters strategically
+v2.44 closed the permission flow; v2.45 closes the cost flow. Without this, editors driving OH over ACP had no way to surface spend — they had to either ignore cost (bad for BYOK users) or scrape stderr (bad in every way). `usage_update` is the ACP spec's official channel (marked UNSTABLE but officially supported in SDK 0.21+), so the editor-side code is one switch arm and rides the spec for free.
+
+### Added
+- **ACP `usage_update` emission** on each `cost_update` event (`src/acp/agent.ts`). Per-session cumulative cost lives in the `sessions` map alongside the abort controller and agent reference. The update payload includes `used` (current input tokens — approximation of "tokens currently in context"), `size` (context window per `getContextWindow(model)`), and `cost` (cumulative `{ amount, currency: "USD" }` rounded to 6 decimal places).
+- **Exported helper `buildUsageUpdate(sessionId, event, cumulativeCost)`** — pure function for direct unit testing. The prompt-loop accumulator is the only caller in production.
+
+### Changed
+- The `bridgeStreamEventToAcp` pure translator still returns `[]` for `cost_update` — accumulation requires session-scoped state that lives in `prompt()`, not in the per-event function. The new `buildUsageUpdate` helper sits alongside it.
+
+### Internal
+- 5 new lock-in tests in `src/acp/agent.test.ts` — basic shape, cumulative semantics, sub-cent rounding, unknown-model fallback to 32K context window, and a regression-check that the pure bridge still returns `[]`.
+- Re-uses existing `getContextWindow(model)` in `src/harness/cost.ts:137` (grep-first hit: model→context mapping already shipped for the compactor).
+
+### Coming in v2.46
+- `rate_limited` events bridged to ACP via `session/update` with retry hint, replacing the current stderr-only path.
+
+## 2.44.0 (2026-05-11) — ACP `session/request_permission` round-trip
+
+First of the four ACP-server gaps closed ahead of the VS Code-extension push. `oh acp` sessions now route permission prompts to the editor over `session/request_permission` instead of silently auto-trusting every tool call. **All ACP tests pass** (29 in `src/acp/agent.test.ts`; +10 new); typecheck clean.
+
+### Why this matters strategically
+ACP v2.35 (2026-05-05) shipped the bridge but hardcoded `permissionMode: "trust"` because the RPC round-trip wasn't wired. That meant editors driving OH over ACP got no permission UX at all — the dangerous-Bash AST and 7-permission-mode safety net were silently bypassed in the editor path. v2.44 closes that gap: any ACP client (Zed, Cline, OpenCode, and the upcoming vscode-acp registration) now surfaces native Allow/Reject prompts before risky tool calls. This is the first of four v2.44–v2.47 PRs that close out the ACP server before the formulahendry/vscode-acp upstream submission lands.
+
+### Added
+- **ACP-backed `askUser` callback** on each new session (`src/acp/agent.ts`). When OH's `StreamingToolExecutor` needs approval for a tool call and no configured `permissionRequest` hook decides, the bridge dispatches a `session/request_permission` RPC to the client with the standard 4-option set (`allow_once` / `allow_always` / `reject_once` / `reject_always`) and translates the client's choice back into a boolean. Cancelled outcomes (when the client interrupts the turn) deny by default.
+- **`AgentConfig.askUser` and `AgentConfig.askUserQuestion`** in the SDK (`src/sdk/index.ts`). The Agent SDK now forwards interactive permission and Q&A callbacks through to `query()` so embedders other than the REPL (ACP, future MCP-as-client, programmatic harness) can wire their own approval UX.
+- **Exported helpers** `buildPermissionOptions()`, `acpOutcomeAllows()`, and `makeAcpAskUser()` for direct unit testing of the bridge translation.
+
+### Changed
+- `createAcpAgent` constructs each session with `permissionMode: "ask"` instead of `"trust"`. Existing trusted-by-default behavior is gone — editors will see permission prompts for medium/high-risk tools. To preserve the old behavior, the client can auto-select `allow_once` in its `requestPermission` handler.
+- The `AcpConnection` type now requires `requestPermission` alongside `sessionUpdate`. Internal-only; the optional SDK dep already exposes both on `AgentSideConnection` so the live wiring is unchanged.
+
+### Internal
+- 10 new lock-in tests in `src/acp/agent.test.ts` covering the helper functions, the standard option set, every outcome path (allow_once, allow_always, reject_once, reject_always, cancelled, unknown), tool-kind derivation in the bridge, and RPC error propagation.
+- Existing 19 tests adjusted via a shared `newFakeConn()` helper that satisfies the tightened connection type without boilerplate.
+
+### Coming in v2.45
+- `cost_update` events bridged to ACP via `_meta` passthrough so editors can show cumulative cost in their statusbar.
+
 ## 2.40.1 (2026-05-07) — `oh evals` portability fix
 
 Drops the external `zstd` runtime dependency so eval packs work on stock Windows installs (which don't ship a `zstd` binary). Pack format is now `repo.tar.gz` by default — built-in to every `tar`. Legacy `repo.tar.zst` packs continue to load and extract for backwards compatibility. **1640/1640 tests pass** (1639 prior + 1 new for the gzip validation path; 4 skipped on Windows for POSIX oracle.sh, unchanged). Typecheck and Biome clean.
