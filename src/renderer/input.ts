@@ -9,6 +9,12 @@ export type KeyEvent = {
   meta: boolean;
   shift: boolean;
   sequence: string; // raw bytes
+  mouse?: {
+    button: number;
+    col: number;
+    row: number;
+    released: boolean;
+  };
 };
 
 /**
@@ -77,12 +83,20 @@ export function parseKey(data: string, offset: number): { event: KeyEvent; consu
       if (endIdx > 3) {
         const params = seq.slice(3, endIdx).split(";");
         const button = parseInt(params[0] ?? "0", 10);
+        const col = parseInt(params[1] ?? "0", 10);
+        const row = parseInt(params[2] ?? "0", 10);
         const consumed = endIdx + 1;
+        const released = seq[endIdx] === "m";
+        const mouse = {
+          button: Number.isFinite(button) ? button : 0,
+          col: Number.isFinite(col) ? col : 0,
+          row: Number.isFinite(row) ? row : 0,
+          released,
+        };
         // button 64 = scroll up, 65 = scroll down
-        if (button === 64) return { event: key("", "scrollup", seq.slice(0, consumed)), consumed };
-        if (button === 65) return { event: key("", "scrolldown", seq.slice(0, consumed)), consumed };
-        // Ignore other mouse events (clicks, moves)
-        return { event: key("", "mouse", seq.slice(0, consumed)), consumed };
+        if (button === 64) return { event: { ...key("", "scrollup", seq.slice(0, consumed)), mouse }, consumed };
+        if (button === 65) return { event: { ...key("", "scrolldown", seq.slice(0, consumed)), mouse }, consumed };
+        return { event: { ...key("", "mouse", seq.slice(0, consumed)), mouse }, consumed };
       }
     }
     // Page Up/Down: ESC [ 5 ~ / ESC [ 6 ~

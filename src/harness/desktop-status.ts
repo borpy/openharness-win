@@ -11,6 +11,7 @@ export type DesktopStatusSnapshot = {
   model: string;
   providerName: string;
   permissionMode: string;
+  taskPersistence?: boolean;
   loading: boolean;
   queueLength: number;
   messageCount: number;

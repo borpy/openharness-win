@@ -52,6 +52,7 @@ function installPreviewMockApi(): void {
     model: "ollama/qwen3:4b",
     providerName: "ollama",
     permissionMode: "ask",
+    taskPersistence: true,
     loading: false,
     queueLength: 1,
     messageCount: 12,
@@ -113,6 +114,8 @@ function installPreviewMockApi(): void {
       blockers: [],
       recommendations: ["Switch models with /ollama switch <model>."],
       errors: [],
+      startable: false,
+      startBlockers: [],
     },
     git: {
       available: true,
@@ -208,6 +211,13 @@ function installPreviewMockApi(): void {
         listener("\r\n/ollama pull qwen3:4b\r\n");
       });
       return terminalState;
+    },
+    startOllamaServer: async () => {
+      terminalListeners.forEach((listener) => {
+        listener("\r\n[desktop] Ollama started and is online at http://localhost:11434.\r\n");
+      });
+      refreshData.ollama = { ...refreshData.ollama, alive: true };
+      return { ...refreshData, status: { ...snapshot, timestamp: Date.now() } };
     },
     minimize: async () => {},
     toggleMaximize: async () => {},
@@ -391,6 +401,35 @@ function KeyValue({ label, value }: { label: string; value?: React.ReactNode }) 
   );
 }
 
+function ToggleRow({
+  label,
+  detail,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  detail: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`toggle-row ${disabled ? "disabled" : ""}`}>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span>
+        <strong>{label}</strong>
+        <small>{detail}</small>
+      </span>
+    </label>
+  );
+}
+
 function useDesktopState() {
   const [appState, setAppState] = useState<DesktopAppState | null>(null);
   const [refreshData, setRefreshData] = useState<DesktopRefreshStatus | null>(null);
@@ -538,6 +577,9 @@ function Toolbox({
   const runtime = snapshot?.runtimeDials ?? refreshData?.runtime.dials;
   const terminalRunning = terminalState?.running ?? false;
   const collapsed = settings?.toolboxCollapsed ?? false;
+  const permissionMode = snapshot?.permissionMode ?? "ask";
+  const fileWritesEnabled = ["acceptEdits", "auto", "trust", "bypassPermissions"].includes(permissionMode);
+  const persistenceEnabled = snapshot?.taskPersistence ?? true;
 
   const sendCommand = useCallback(
     async (command: string) => {
@@ -661,8 +703,24 @@ function Toolbox({
         </div>
         <KeyValue label="Model" value={snapshot?.model || ollama?.currentModel} />
         <KeyValue label="Provider" value={snapshot?.providerName || "pending"} />
-        <KeyValue label="Permission" value={snapshot?.permissionMode || "--"} />
+        <KeyValue label="Permission" value={permissionMode || "--"} />
         <KeyValue label="Queue" value={snapshot ? `${snapshot.queueLength} pending` : "--"} />
+        <div className="toggle-stack">
+          <ToggleRow
+            label="File writes"
+            detail={fileWritesEnabled ? "Write/Edit auto-approved" : "Ask before file writes"}
+            checked={fileWritesEnabled}
+            disabled={!terminalRunning}
+            onChange={(checked) => sendCommand(checked ? "/permissions acceptEdits" : "/permissions ask")}
+          />
+          <ToggleRow
+            label="Persist"
+            detail={persistenceEnabled ? "Carry on through chained steps" : "Single response mode"}
+            checked={persistenceEnabled}
+            disabled={!terminalRunning}
+            onChange={(checked) => sendCommand(checked ? "/persist on" : "/persist off")}
+          />
+        </div>
         <div className="button-grid two">
           <CommandButton
             icon={Square}
@@ -754,8 +812,20 @@ function Toolbox({
               {item}
             </div>
           ))}
+          {ollama?.lastStartAttempt ? <div className="muted line-clamp">{ollama.lastStartAttempt}</div> : null}
         </div>
         <div className="button-grid two">
+          {!ollama?.alive ? (
+            <CommandButton
+              icon={Play}
+              label="Start"
+              onClick={async () => {
+                await window.openHarnessDesktop.startOllamaServer();
+                await refresh();
+              }}
+              disabled={!ollama?.startable}
+            />
+          ) : null}
           <CommandButton
             icon={RefreshCw}
             label="Panel"
@@ -867,6 +937,12 @@ function Toolbox({
             icon={Activity}
             label="Status"
             onClick={() => sendCommand("/status")}
+            disabled={!terminalRunning}
+          />
+          <CommandButton
+            icon={PanelRightClose}
+            label="Compact"
+            onClick={() => sendCommand("/compact")}
             disabled={!terminalRunning}
           />
         </div>

@@ -10,6 +10,7 @@ import { readApprovalLog } from "../harness/approvals.js";
 import { readOhConfig } from "../harness/config.js";
 import { loadKeybindings } from "../harness/keybindings.js";
 import { isTrusted, listTrusted, trust } from "../harness/trust.js";
+import type { PermissionMode } from "../types/permissions.js";
 import type { CommandHandler } from "./types.js";
 
 const KEYBINDINGS_TEMPLATE = `[
@@ -22,6 +23,22 @@ const KEYBINDINGS_TEMPLATE = `[
   { "key": "ctrl+k ctrl+l", "action": "/log" }
 ]
 `;
+
+function normalizePermissionMode(input: string): PermissionMode | null {
+  const mode = input.trim().toLowerCase();
+  const aliases: Record<string, PermissionMode> = {
+    ask: "ask",
+    trust: "trust",
+    deny: "deny",
+    acceptedits: "acceptEdits",
+    "accept-edits": "acceptEdits",
+    plan: "plan",
+    auto: "auto",
+    bypasspermissions: "bypassPermissions",
+    "bypass-permissions": "bypassPermissions",
+  };
+  return aliases[mode] ?? null;
+}
 
 /**
  * Open a file in the user's editor — `$VISUAL` → `$EDITOR` → `notepad`
@@ -178,14 +195,38 @@ export function registerSettingsCommands(
       });
       return { output: `Last ${records.length} approval decisions:\n${lines.join("\n")}`, handled: true };
     }
-    const mode = trimmed.toLowerCase();
-    const valid = ["ask", "trust", "deny", "acceptedits", "plan", "auto", "bypasspermissions"];
-    if (!valid.includes(mode)) {
-      return { output: `Unknown mode: ${mode}. Valid: ${valid.join(", ")} | log`, handled: true };
+    const nextMode = normalizePermissionMode(trimmed);
+    if (!nextMode) {
+      return {
+        output: `Unknown mode: ${trimmed}. Valid: ask, trust, deny, acceptEdits, plan, auto, bypassPermissions | log`,
+        handled: true,
+      };
     }
     return {
-      output: `Permission mode set to: ${mode}\n(Note: takes effect for new tool calls in this session)`,
+      output: `Permission mode set to: ${nextMode}\n(Note: takes effect for new tool calls in this session)`,
       handled: true,
+      newPermissionMode: nextMode,
+    };
+  });
+
+  register("persist", "Toggle autonomous task persistence (on/off)", (args, ctx) => {
+    const arg = args.trim().toLowerCase();
+    if (!arg) {
+      return {
+        output: `Task persistence is ${ctx.taskPersistence ? "on" : "off"}.\nUsage: /persist on or /persist off`,
+        handled: true,
+      };
+    }
+    const truthy = new Set(["on", "true", "yes", "1", "enable", "enabled"]);
+    const falsy = new Set(["off", "false", "no", "0", "disable", "disabled"]);
+    if (!truthy.has(arg) && !falsy.has(arg)) {
+      return { output: "Usage: /persist on or /persist off", handled: true };
+    }
+    const enabled = truthy.has(arg);
+    return {
+      output: `Task persistence ${enabled ? "on" : "off"}.`,
+      handled: true,
+      taskPersistence: enabled,
     };
   });
 

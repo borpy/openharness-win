@@ -25,6 +25,10 @@ export type QueryConfig = {
   gitCommitPerTool?: boolean;
   /** For sub-agent invocations: the agent role name (feeds into the model router). */
   role?: string;
+  /** Disable model-router tier substitution for explicit session model overrides. */
+  disableModelRouter?: boolean;
+  /** Encourage multi-step tool persistence until the user's task is verified complete. */
+  taskPersistence?: boolean;
   /**
    * MCP tool name (e.g. `mcp__myperm__check`) consulted when a tool needs
    * approval and no permission hook gave a decision (audit B1). Mirrors
@@ -61,4 +65,10 @@ export type QueryLoopState = {
   lastTurnHadTools?: boolean;
   /** Number of tool calls in the previous turn (feeds ModelRouter) */
   lastTurnToolCount?: number;
+  /** Whether the previous turn produced any completed tool result activity. */
+  lastTurnHadToolResults?: boolean;
+  /** Whether the previous turn completed at least one tool successfully. */
+  lastTurnHadSuccessfulTool?: boolean;
+  /** Number of persistence nudges already inserted for this query. */
+  taskPersistenceNudges?: number;
 };

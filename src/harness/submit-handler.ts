@@ -20,6 +20,7 @@ export type SubmitContext = {
   currentModel: string;
   providerName: string;
   permissionMode: PermissionMode;
+  taskPersistence?: boolean;
   cost: CostTracker;
   performance?: PerformanceSnapshot;
   runtimeDials?: RuntimeDials;
@@ -40,6 +41,10 @@ export type SubmitResult = {
   vimToggled?: boolean;
   /** Whether fast mode was toggled */
   fastModeToggled?: boolean;
+  /** New permission mode if changed by slash command */
+  newPermissionMode?: PermissionMode;
+  /** New task persistence state if changed by slash command */
+  taskPersistence?: boolean;
 };
 
 /**
@@ -92,6 +97,7 @@ export async function handleUserInput(input: string, ctx: SubmitContext): Promis
       model: ctx.currentModel,
       providerName: ctx.providerName,
       permissionMode: ctx.permissionMode,
+      taskPersistence: ctx.taskPersistence,
       totalCost: ctx.cost.totalCost,
       totalInputTokens: ctx.cost.totalInputTokens,
       totalOutputTokens: ctx.cost.totalOutputTokens,
@@ -113,6 +119,8 @@ export async function handleUserInput(input: string, ctx: SubmitContext): Promis
           handled: true,
           messages,
           newModel: result.newModel ?? undefined,
+          newPermissionMode: result.newPermissionMode ?? undefined,
+          taskPersistence: result.taskPersistence,
         };
       }
       if (result.prependToPrompt) {
@@ -153,6 +161,8 @@ export async function handleUserInput(input: string, ctx: SubmitContext): Promis
           messages,
           prompt: finalPrependPrompt,
           newModel: result.newModel ?? undefined,
+          newPermissionMode: result.newPermissionMode ?? undefined,
+          taskPersistence: result.taskPersistence,
         };
       }
     }

@@ -104,6 +104,21 @@ export class CellGrid {
   }
 
   /**
+   * Write a single clipped row. Newlines and over-width text are ignored
+   * instead of wrapping into reserved rows below the target.
+   */
+  writeTextClipped(row: number, col: number, text: string, style: Style, maxCol = this.width): void {
+    const limit = Math.max(0, Math.min(maxCol, this.width));
+    let c = col;
+    for (let i = 0; i < text.length && c < limit; i++) {
+      const ch = text[i]!;
+      if (ch === "\n" || ch === "\r") break;
+      this.setCell(row, c, ch, style);
+      c++;
+    }
+  }
+
+  /**
    * Write word-wrapped text. Splits on spaces, wraps at wrapWidth.
    * Returns the number of rows consumed.
    */

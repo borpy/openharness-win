@@ -108,6 +108,7 @@ type MinimalConfig = {
   systemPrompt: string;
   permissionMode: "trust";
   role?: string;
+  disableModelRouter?: boolean;
 };
 
 // ── Tests ──
@@ -172,6 +173,31 @@ describe("query — ModelRouter integration", () => {
         "BALANCED",
         `expected BALANCED on first turn with default heuristic; got ${modelsUsed[0]}`,
       );
+    });
+  });
+
+  it("disableModelRouter keeps an explicit session model even when router tiers are configured", async () => {
+    await withRouterConfig({ fast: "FAST", balanced: "qwen3:4b", powerful: "POWERFUL" }, async () => {
+      const { provider, modelsUsed } = makeRecordingProvider([
+        [{ type: "text_delta", content: "ok" } satisfies StreamEvent],
+      ]);
+
+      const gen = query(
+        "hi",
+        {
+          provider,
+          model: "granite4:latest",
+          tools: [],
+          systemPrompt: "",
+          permissionMode: "trust",
+          disableModelRouter: true,
+        } as unknown as MinimalConfig,
+        [{ role: "user", content: "hi" } as Message],
+      );
+      await drain(gen);
+
+      assert.equal(modelsUsed.length, 1, "stream() should have been called once");
+      assert.equal(modelsUsed[0], "granite4:latest", "manual model switch must not be replaced by router tiers");
     });
   });
 

@@ -154,6 +154,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     historyIndex: -1,
     vimMode: null,
     fastMode: false,
+    taskPersistence: true,
     acSuggestions: [],
     acDescriptions: [],
     acIndex: -1,
@@ -168,6 +169,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   const promptQueue: string[] = [];
   const recentToolsUsed: string[] = [];
   let drainingPromptQueue = false;
+  let manualModelOverride = false;
 
   // Legacy aliases — these read/write through the store.
   // Gradually migrate callers to use store.setState() directly.
@@ -180,6 +182,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   let historyIndex = s().historyIndex;
   let vimMode = s().vimMode;
   let fastMode = s().fastMode;
+  let taskPersistence = s().taskPersistence;
   let acSuggestions = s().acSuggestions;
   let acDescriptions = s().acDescriptions;
   // Audit U-A3: parallel category array for the picker. Local-only — no
@@ -200,6 +203,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     historyIndex = state.historyIndex;
     vimMode = state.vimMode;
     fastMode = state.fastMode;
+    taskPersistence = state.taskPersistence;
     acSuggestions = state.acSuggestions;
     acDescriptions = state.acDescriptions;
     acIndex = state.acIndex;
@@ -320,6 +324,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       historyIndex,
       vimMode,
       fastMode,
+      taskPersistence,
       acSuggestions,
       acDescriptions,
       acIndex,
@@ -333,7 +338,10 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     renderer.setMessages(messages);
     renderer.setLoading(loading);
     const queueHint = promptQueue.length > 0 ? ` | queue ${promptQueue.length}` : "";
-    const hints = `exit to quit${loading ? " | Ctrl+C stop | Ctrl+O thinking" : " | Tab expand tools | Ctrl+O transcript"}${queueHint}${companionConfig?.soul?.name ? ` | @${companionConfig.soul.name}` : ""}`;
+    const idleHint = renderer.isCompactMode()
+      ? " | Tab expand replies | /compact off"
+      : " | Tab expand tools | Ctrl+O transcript";
+    const hints = `exit to quit${loading ? " | Ctrl+C stop | Ctrl+O thinking" : idleHint}${queueHint}${companionConfig?.soul?.name ? ` | @${companionConfig.soul.name}` : ""}`;
     renderer.setStatusHints(hints);
     // Status line: model | tokens | cost | ctx
     const inTok = cost.totalInputTokens;
@@ -361,6 +369,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       model: currentModel || config.model || "",
       providerName: config.provider.name,
       permissionMode: config.permissionMode,
+      taskPersistence,
       loading,
       queueLength: promptQueue.length,
       messageCount: messages.length,
@@ -779,7 +788,11 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       renderer.scrollBy(-3);
       return;
     }
-    if (key.name === "pageup" || key.name === "pagedown" || key.name === "mouse") return;
+    if (key.name === "mouse") {
+      if (renderer.toggleCompactAtMouse(key)) return;
+      return;
+    }
+    if (key.name === "pageup" || key.name === "pagedown") return;
 
     // Shift+Tab: cycle permission mode (audit U-A1). Mirrors Claude Code's
     // quick-toggle. Cycles ask → acceptEdits → plan → trust → ask. The
@@ -809,6 +822,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         renderer.setAutocomplete(acSuggestions, acIndex, acDescriptions, acCategories);
         return;
       }
+      if (renderer.cycleCompactDisclosure()) return;
       renderer.cycleToolCallExpansion();
       return;
     }
@@ -874,6 +888,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       historyIndex,
       vimMode,
       fastMode,
+      taskPersistence,
       acSuggestions,
       acDescriptions,
       acIndex,
@@ -947,6 +962,21 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   async function handleSubmit(input: string, queued = false, healthPrechecked = false) {
     // Clear any previous errors on new input
     renderer.setError(null);
+
+    if (input === "/compact" || input.toLowerCase() === "/compact off") {
+      if (input.toLowerCase() === "/compact off") {
+        renderer.disableCompactMode();
+        messages = [...messages, createInfoMessage("Compact view off. Transcript view restored.")];
+      } else {
+        renderer.enableCompactMode();
+        messages = [
+          ...messages,
+          createInfoMessage("Compact view on. Older assistant replies are folded; latest remains expanded."),
+        ];
+      }
+      syncRenderer();
+      return;
+    }
 
     if (input === "/queue" || input.startsWith("/queue ")) {
       const [, actionRaw] = input.split(/\s+/, 2);
@@ -1059,6 +1089,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       currentModel,
       providerName: config.provider.name,
       permissionMode: config.permissionMode,
+      taskPersistence,
       cost,
       performance: performanceTracker.snapshot(),
       runtimeDials: runtimeDialTracker.snapshot({
@@ -1114,7 +1145,17 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       syncRenderer();
       return;
     }
-    if (result.newModel) currentModel = result.newModel;
+    if (result.newModel) {
+      currentModel = result.newModel;
+      session.model = result.newModel;
+      manualModelOverride = true;
+    }
+    if (result.newPermissionMode) {
+      config.permissionMode = result.newPermissionMode;
+    }
+    if (typeof result.taskPersistence === "boolean") {
+      taskPersistence = result.taskPersistence;
+    }
     if (result.vimToggled) {
       vimMode = vimMode === null ? "normal" : null;
       messages = [...messages, createInfoMessage(vimMode ? "Vim mode ON" : "Vim mode OFF")];
@@ -1150,6 +1191,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
     abortController = new AbortController();
     let accumulated = "";
+    let turnCompleted = false;
+    let turnAborted = false;
     const callIdToToolName = new Map<string, string>();
 
     const askUser = (toolName: string, description: string, riskLevel?: string): Promise<boolean> => {
@@ -1178,9 +1221,11 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       tools: config.tools,
       systemPrompt: effectiveSystemPrompt,
       permissionMode: config.permissionMode,
+      taskPersistence,
       askUser,
       askUserQuestion,
       model: currentModel || undefined,
+      disableModelRouter: manualModelOverride,
       abortSignal: abortController.signal,
       tracer,
       sessionId: session.id,
@@ -1347,6 +1392,9 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             break;
 
           case "turn_complete": {
+            turnCompleted = true;
+            if (event.reason === "aborted") turnAborted = true;
+            const interruptedSuffix = event.reason === "aborted" ? "\n\n[interrupted]" : "";
             // Save thinking summary before clearing
             const thinkElapsed = renderer.getThinkingStartedAt()
               ? Math.floor((Date.now() - renderer.getThinkingStartedAt()!) / 1000)
@@ -1362,15 +1410,18 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             if (accumulated) {
               const last = messages[messages.length - 1];
               if (last?.meta?.isStreaming) {
-                messages = [...messages.slice(0, -1), { ...last, content: last.content + accumulated, meta: {} }];
+                messages = [
+                  ...messages.slice(0, -1),
+                  { ...last, content: last.content + accumulated + interruptedSuffix, meta: {} },
+                ];
               } else {
-                messages = [...messages, createAssistantMessage(accumulated)];
+                messages = [...messages, createAssistantMessage(accumulated + interruptedSuffix)];
               }
               accumulated = "";
             } else {
               const last = messages[messages.length - 1];
               if (last?.meta?.isStreaming) {
-                messages = [...messages.slice(0, -1), { ...last, meta: {} }];
+                messages = [...messages.slice(0, -1), { ...last, content: last.content + interruptedSuffix, meta: {} }];
               }
             }
             renderer.setStreamingText("");
@@ -1391,18 +1442,29 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     } catch (err) {
       if (!abortController.signal.aborted) {
         renderer.setError(err instanceof Error ? err.message : String(err));
+      } else {
+        turnAborted = true;
       }
     } finally {
       performanceTracker.finishTurn();
-      // Preserve partial streaming text on abort
+      const wasAborted = turnAborted || abortController.signal.aborted;
+      // Preserve partial streaming text. Only annotate it as interrupted when
+      // the turn was genuinely aborted; normal tool-followup turns can leave
+      // assistant preface text in the accumulator after successful completion.
       if (accumulated) {
+        const suffix = wasAborted ? "\n\n[interrupted]" : "";
         const last = messages[messages.length - 1];
         if (last?.meta?.isStreaming) {
-          messages = [...messages.slice(0, -1), { ...last, content: last.content + accumulated, meta: {} }];
+          messages = [...messages.slice(0, -1), { ...last, content: last.content + accumulated + suffix, meta: {} }];
         } else {
-          messages = [...messages, createAssistantMessage(`${accumulated}\n\n[interrupted]`)];
+          messages = [...messages, createAssistantMessage(`${accumulated}${suffix}`)];
         }
         accumulated = "";
+      } else if (wasAborted && !turnCompleted) {
+        const last = messages[messages.length - 1];
+        if (last?.meta?.isStreaming) {
+          messages = [...messages.slice(0, -1), { ...last, meta: {} }];
+        }
       }
       loading = false;
       abortController = null;

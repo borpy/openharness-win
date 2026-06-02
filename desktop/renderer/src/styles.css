@@ -396,6 +396,62 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.toggle-stack {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 4px;
+}
+
+.toggle-row {
+  min-height: 36px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  background: #101315;
+  cursor: pointer;
+}
+
+.toggle-row.disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.toggle-row input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #79b8ff;
+}
+
+.toggle-row span {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.toggle-row strong,
+.toggle-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toggle-row strong {
+  color: #e8edf2;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.toggle-row small {
+  color: #98a1aa;
+  font-size: 11px;
+}
+
 .metric {
   margin-bottom: 9px;
 }

@@ -38,6 +38,14 @@ export { compressMessages } from "./compress.js";
 export type { QueryConfig, QueryLoopState } from "./types.js";
 
 const DEFAULT_MAX_TURNS = 50;
+const MAX_TASK_PERSISTENCE_NUDGES = 2;
+
+const TASK_PERSISTENCE_PROMPT = `# Task Persistence
+- Treat the user's prompt as a task to complete, not a one-step response.
+- If the task requires reading files, editing files, running commands, checking git state, or verifying output, continue using tools until the requested outcome is complete.
+- Do not stop after saying what you will do. If you describe a next action, perform it with tools in the same turn loop.
+- Before giving the final answer, check whether any requested item remains unresolved. If something remains, call the next tool instead of ending.
+- Keep the final answer concise and only final once the work is done or genuinely blocked.`;
 
 /** Rough context-usage estimate in [0, 1]. Returns undefined when tokenization is unavailable. */
 function estimateRouteContextUsage(messages: Message[], provider: Provider, model: string): number | undefined {
@@ -54,13 +62,25 @@ function estimateRouteContextUsage(messages: Message[], provider: Provider, mode
   return Math.min(1, total / window);
 }
 
+function looksLikeUnresolvedActionPreface(content: string): boolean {
+  const text = content.trim();
+  if (!text) return false;
+  if (/\b(done|complete|completed|finished|implemented|created|wrote|fixed|verified)\b/i.test(text)) return false;
+  if (/\b(how can i help|what would you like|tell me what|provide the files)\b/i.test(text)) return false;
+  const intent =
+    /\b(i(?:'|’)?ll|i will|i(?:'|’)?m going to|i am going to|let me|first,?\s*i|next,?\s*i|i need to|i should)\b/i;
+  const action =
+    /\b(read|inspect|check|create|write|edit|modify|run|test|open|analy[sz]e|combine|search|find|implement|fix|verify)\b/i;
+  return intent.test(text) && action.test(text);
+}
+
 export async function* query(
   userMessage: string,
   config: QueryConfig,
   existingMessages: import("../types/message.js").Message[] = [],
 ): AsyncGenerator<StreamEvent, void> {
   const maxTurns = config.maxTurns ?? DEFAULT_MAX_TURNS;
-  const routerCfg = readOhConfig()?.modelRouter ?? {};
+  const routerCfg = config.disableModelRouter ? {} : (readOhConfig()?.modelRouter ?? {});
   const router = new ModelRouter(routerCfg, config.model ?? "");
   const querySpanId = config.tracer?.startSpan("query", {
     model: config.model,
@@ -107,6 +127,10 @@ export async function* query(
   const dirtyTreeContext = buildDirtyTreeContext(toolContext.workingDir, config.sessionId);
   if (dirtyTreeContext) {
     fullSystemPrompt += `\n\n# Git Dirty Tree Handling\n\n${dirtyTreeContext}`;
+  }
+
+  if (config.taskPersistence) {
+    fullSystemPrompt += `\n\n${TASK_PERSISTENCE_PROMPT}`;
   }
 
   // Auto-trigger skills matching user message
@@ -356,6 +380,10 @@ export async function* query(
       }
 
       if (assistantContent === "" && toolCalls.length === 0) {
+        if (state.lastTurnHadToolResults || state.lastTurnHadSuccessfulTool) {
+          yield { type: "turn_complete", reason: "completed" };
+          return;
+        }
         yield {
           type: "error",
           message: "No response received. Check that your model server is running and the model name is correct.",
@@ -366,6 +394,23 @@ export async function* query(
       state.messages.push(createAssistantMessage(assistantContent, toolCalls.length > 0 ? toolCalls : undefined));
 
       if (toolCalls.length === 0) {
+        if (
+          config.taskPersistence &&
+          config.tools.length > 0 &&
+          state.turn < maxTurns &&
+          (state.taskPersistenceNudges ?? 0) < MAX_TASK_PERSISTENCE_NUDGES &&
+          looksLikeUnresolvedActionPreface(assistantContent)
+        ) {
+          state.taskPersistenceNudges = (state.taskPersistenceNudges ?? 0) + 1;
+          state.messages.push(
+            createUserMessage(
+              "Continue the task now. You described a next action but did not call a tool. Use the available tools to perform the next concrete step, then keep going until the task is complete or genuinely blocked.",
+            ),
+          );
+          state.lastTurnHadTools = false;
+          state.lastTurnToolCount = 0;
+          continue;
+        }
         yield { type: "turn_complete", reason: "completed" };
         return;
       }
@@ -374,6 +419,8 @@ export async function* query(
       await streamingExecutor.waitForAll();
       const completedResults = [...streamingExecutor.getCompletedResults()];
       const executedIds = new Set(completedResults.map((r) => r.toolCall.id));
+      let hadToolResults = completedResults.length > 0;
+      let hadSuccessfulTool = completedResults.some(({ result }) => !result.isError);
 
       for (const { callId, chunk } of streamingExecutor.outputChunks) {
         yield { type: "tool_output_delta", callId, chunk };
@@ -390,6 +437,8 @@ export async function* query(
 
       // Execute remaining tools not started during streaming
       const remaining = toolCalls.filter((tc) => !executedIds.has(tc.id));
+      state.lastTurnHadToolResults = hadToolResults;
+      state.lastTurnHadSuccessfulTool = hadSuccessfulTool;
       if (remaining.length > 0) {
         yield* executeToolCalls(
           remaining,
@@ -400,10 +449,14 @@ export async function* query(
           state,
           config.permissionPromptTool,
         );
+        hadToolResults = state.lastTurnHadToolResults === true;
+        hadSuccessfulTool = state.lastTurnHadSuccessfulTool === true;
       }
 
       state.lastTurnHadTools = toolCalls.length > 0;
       state.lastTurnToolCount = toolCalls.length;
+      state.lastTurnHadToolResults = hadToolResults;
+      state.lastTurnHadSuccessfulTool = hadSuccessfulTool;
       state.transition = "next_turn";
     }
 

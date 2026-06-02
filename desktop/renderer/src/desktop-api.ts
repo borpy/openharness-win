@@ -26,6 +26,7 @@ export type DesktopStatusSnapshot = {
   model: string;
   providerName: string;
   permissionMode: string;
+  taskPersistence?: boolean;
   loading: boolean;
   queueLength: number;
   messageCount: number;
@@ -88,6 +89,9 @@ export type DesktopRefreshStatus = {
     blockers: string[];
     recommendations: string[];
     errors: string[];
+    startable: boolean;
+    startBlockers: string[];
+    lastStartAttempt?: string;
   };
   git: {
     available: boolean;
@@ -136,6 +140,7 @@ export type OpenHarnessDesktopApi = {
   interrupt(): Promise<DesktopTerminalState>;
   sendCommand(command: string): Promise<DesktopTerminalState>;
   pullDefaultOllamaModel(): Promise<DesktopTerminalState>;
+  startOllamaServer(): Promise<DesktopRefreshStatus>;
   minimize(): Promise<void>;
   toggleMaximize(): Promise<void>;
   close(): Promise<void>;

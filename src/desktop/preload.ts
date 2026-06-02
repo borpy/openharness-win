@@ -27,6 +27,7 @@ const api = {
   interrupt: (): Promise<DesktopTerminalState> => ipcRenderer.invoke("terminal:interrupt"),
   sendCommand: (command: string): Promise<DesktopTerminalState> => ipcRenderer.invoke("terminal:send-command", command),
   pullDefaultOllamaModel: (): Promise<DesktopTerminalState> => ipcRenderer.invoke("ollama:pull-default"),
+  startOllamaServer: (): Promise<DesktopRefreshStatus> => ipcRenderer.invoke("ollama:start-server"),
   minimize: (): Promise<void> => ipcRenderer.invoke("window:minimize"),
   toggleMaximize: (): Promise<void> => ipcRenderer.invoke("window:toggle-maximize"),
   close: (): Promise<void> => ipcRenderer.invoke("window:close"),

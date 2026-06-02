@@ -433,7 +433,7 @@ export function renderQuestionPromptSection(
 
 export function renderStatusLineSection(state: LayoutState, grid: CellGrid, nextRow: number, limit: number): number {
   if (!state.statusLine || nextRow >= limit) return nextRow;
-  grid.writeText(nextRow, 0, state.statusLine, S_DIM);
+  grid.writeTextClipped(nextRow, 0, state.statusLine, S_DIM);
   return nextRow + 1;
 }
 

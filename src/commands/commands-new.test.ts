@@ -242,10 +242,11 @@ test("/permissions with no args shows current mode", async () => {
 });
 
 test("/permissions with valid mode sets it", async () => {
-  const result = await processSlashCommand("/permissions deny", makeCtx());
+  const result = await processSlashCommand("/permissions acceptEdits", makeCtx());
   assert.ok(result);
   assert.equal(result.handled, true);
-  assert.ok(result.output.includes("deny"));
+  assert.ok(result.output.includes("acceptEdits"));
+  assert.equal(result.newPermissionMode, "acceptEdits");
 });
 
 test("/permissions with invalid mode shows error", async () => {
@@ -253,6 +254,18 @@ test("/permissions with invalid mode shows error", async () => {
   assert.ok(result);
   assert.equal(result.handled, true);
   assert.ok(result.output.includes("Unknown mode"));
+});
+
+test("/persist toggles task persistence state", async () => {
+  const on = await processSlashCommand("/persist on", makeCtx({ taskPersistence: false }));
+  assert.ok(on);
+  assert.equal(on.handled, true);
+  assert.equal(on.taskPersistence, true);
+
+  const off = await processSlashCommand("/persist off", makeCtx({ taskPersistence: true }));
+  assert.ok(off);
+  assert.equal(off.handled, true);
+  assert.equal(off.taskPersistence, false);
 });
 
 // ── /allowed-tools ──

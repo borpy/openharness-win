@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { DEFAULT_LOCAL_OLLAMA_MODEL, selectPreferredLocalOllamaModel } from "./ollama-defaults.js";
 
 export const DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434";
@@ -24,6 +25,9 @@ export type OllamaControlStatus = {
   blockers: string[];
   recommendations: string[];
   errors: string[];
+  startable: boolean;
+  startBlockers: string[];
+  lastStartAttempt?: string;
 };
 
 export type OllamaGenerateTestResult = {
@@ -39,6 +43,15 @@ export type OllamaPullResult = {
   message: string;
 };
 
+export type OllamaStartResult = {
+  ok: boolean;
+  baseUrl: string;
+  message: string;
+  blockers: string[];
+  pid?: number;
+  elapsedMs: number;
+};
+
 type RequestResult<T> = {
   ok: boolean;
   status: number;
@@ -50,6 +63,10 @@ type RequestResult<T> = {
 const DEFAULT_TIMEOUT_MS = 3000;
 const GENERATE_TIMEOUT_MS = 30_000;
 const PULL_TIMEOUT_MS = 10 * 60_000;
+const START_TIMEOUT_MS = 15_000;
+const START_POLL_INTERVAL_MS = 500;
+
+let lastStartAttempt: string | undefined;
 
 export function normalizeOllamaBaseUrl(baseUrl?: string): string {
   const raw = (baseUrl || process.env.OLLAMA_HOST || DEFAULT_OLLAMA_BASE_URL).trim();
@@ -61,6 +78,26 @@ export function normalizeOllamaBaseUrl(baseUrl?: string): string {
 export function normalizeOllamaModelName(model?: string): string {
   const trimmed = model?.trim() ?? "";
   return trimmed.toLowerCase().startsWith("ollama/") ? trimmed.slice("ollama/".length) : trimmed;
+}
+
+export function ollamaStartBlockers(baseUrl: string): string[] {
+  let url: URL;
+  try {
+    url = new URL(normalizeOllamaBaseUrl(baseUrl));
+  } catch {
+    return [`Ollama base URL is invalid: ${baseUrl}`];
+  }
+  const host = url.hostname.toLowerCase();
+  const localHosts = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
+  if (!localHosts.has(host)) {
+    return [
+      `Cannot start Ollama for remote host '${url.hostname}'. Start it on that machine or point OLLAMA_HOST at localhost.`,
+    ];
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    return [`Cannot start Ollama for unsupported protocol '${url.protocol}'.`];
+  }
+  return [];
 }
 
 async function requestJson<T>(
@@ -158,6 +195,8 @@ export async function fetchOllamaStatus(options: {
   const blockers: string[] = [];
   const recommendations: string[] = [];
   const errors: string[] = [];
+  const startBlockers = ollamaStartBlockers(baseUrl);
+  const startable = !alive && startBlockers.length === 0;
 
   if (!versionResponse.ok) {
     errors.push(`version check failed: ${versionResponse.error ?? (versionResponse.text || versionResponse.status)}`);
@@ -167,7 +206,11 @@ export async function fetchOllamaStatus(options: {
   }
   if (!alive) {
     blockers.push(`Ollama is not responding at ${baseUrl}.`);
-    recommendations.push("Start the server with `ollama serve`, or set OLLAMA_HOST / baseUrl to the right endpoint.");
+    recommendations.push(
+      startable
+        ? "Start the server with `/ollama start`, `ollama serve`, or the desktop Start button."
+        : "Start the server on the target host, or set OLLAMA_HOST / baseUrl to the right endpoint.",
+    );
   } else if (models.length === 0) {
     blockers.push("Ollama is online but no local models are installed.");
     recommendations.push(`Install the default local model with: ollama pull ${DEFAULT_LOCAL_OLLAMA_MODEL}`);
@@ -191,6 +234,108 @@ export async function fetchOllamaStatus(options: {
     blockers,
     recommendations,
     errors,
+    startable,
+    startBlockers,
+    ...(lastStartAttempt ? { lastStartAttempt } : {}),
+  };
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function startOllamaServer(
+  options: {
+    baseUrl?: string;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+    fetchImpl?: OllamaFetch;
+    spawnImpl?: typeof spawn;
+  } = {},
+): Promise<OllamaStartResult> {
+  const startedAt = Date.now();
+  const baseUrl = normalizeOllamaBaseUrl(options.baseUrl);
+  const blockers = ollamaStartBlockers(baseUrl);
+  if (blockers.length > 0) {
+    const message = blockers.join(" ");
+    lastStartAttempt = message;
+    return { ok: false, baseUrl, message, blockers, elapsedMs: Date.now() - startedAt };
+  }
+
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  const alreadyOnline = await requestJson<{ version?: string }>(`${baseUrl}/api/version`, {}, 1000, fetchImpl);
+  if (alreadyOnline.ok) {
+    const message = `Ollama is already online at ${baseUrl}.`;
+    lastStartAttempt = message;
+    return { ok: true, baseUrl, message, blockers: [], elapsedMs: Date.now() - startedAt };
+  }
+
+  const spawnImpl = options.spawnImpl ?? spawn;
+  let child: ReturnType<typeof spawn>;
+  let spawnError: Error | undefined;
+  try {
+    child = spawnImpl("ollama", ["serve"], {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    child.once("error", (err) => {
+      spawnError = err;
+    });
+    child.unref();
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    const message = `Could not start Ollama: ${detail}`;
+    lastStartAttempt = message;
+    return { ok: false, baseUrl, message, blockers: [message], elapsedMs: Date.now() - startedAt };
+  }
+
+  const timeoutMs = options.timeoutMs ?? START_TIMEOUT_MS;
+  const pollIntervalMs = options.pollIntervalMs ?? START_POLL_INTERVAL_MS;
+  const deadline = Date.now() + timeoutMs;
+  let lastError = "";
+
+  while (Date.now() < deadline) {
+    await sleep(pollIntervalMs);
+    if (spawnError) {
+      const message = `Could not start Ollama: ${spawnError.message}`;
+      lastStartAttempt = message;
+      return {
+        ok: false,
+        baseUrl,
+        message,
+        blockers: [message],
+        ...(child.pid ? { pid: child.pid } : {}),
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
+    const response = await requestJson<{ version?: string }>(`${baseUrl}/api/version`, {}, 1000, fetchImpl);
+    if (response.ok) {
+      const message = `Ollama started and is online at ${baseUrl}.`;
+      lastStartAttempt = message;
+      return {
+        ok: true,
+        baseUrl,
+        message,
+        blockers: [],
+        ...(child.pid ? { pid: child.pid } : {}),
+        elapsedMs: Date.now() - startedAt,
+      };
+    }
+    lastError = response.error ?? response.text ?? String(response.status);
+  }
+
+  const message = `Started 'ollama serve' but ${baseUrl} did not respond within ${timeoutMs}ms${
+    lastError ? ` (${lastError})` : ""
+  }.`;
+  lastStartAttempt = message;
+  return {
+    ok: false,
+    baseUrl,
+    message,
+    blockers: [message],
+    ...(child.pid ? { pid: child.pid } : {}),
+    elapsedMs: Date.now() - startedAt,
   };
 }
 
@@ -313,6 +458,7 @@ export function formatOllamaControlPanel(status: OllamaControlStatus): string {
     "  /ollama models",
     "  /ollama switch <model>",
     `  /ollama pull ${DEFAULT_LOCAL_OLLAMA_MODEL}`,
+    "  /ollama start",
     "  /ollama diagnose [model]",
     "  /ollama poll [samples] [intervalMs]",
   );

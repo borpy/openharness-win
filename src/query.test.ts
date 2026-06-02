@@ -84,7 +84,72 @@ test("query: terminates on budget exceeded", async () => {
   assert.ok(events.length > 0);
 });
 
+test("query: successful tool call plus empty final model turn completes without no-response diagnostic", async () => {
+  const provider = createMockProvider([toolCallEvents("MockTool", { input: "x" }), []]);
+  const mockTool = createMockTool("MockTool", { result: { output: "ok", isError: false } });
+  const events: any[] = [];
+
+  for await (const ev of query("read files", {
+    provider,
+    tools: [mockTool],
+    systemPrompt: "test",
+    permissionMode: "trust",
+    maxTurns: 3,
+  })) {
+    events.push(ev);
+  }
+
+  assert.equal(
+    events.some((e) => e.type === "error" && /No response received/.test(e.message)),
+    false,
+  );
+  assert.ok(events.some((e) => e.type === "tool_call_end" && e.isError === false));
+  assert.ok(events.some((e) => e.type === "turn_complete" && e.reason === "completed"));
+});
+
+test("query: genuine empty model response reports no-response diagnostic", async () => {
+  const provider = createMockProvider([[]]);
+  const events: any[] = [];
+
+  for await (const ev of query("empty", {
+    provider,
+    tools: [],
+    systemPrompt: "test",
+    permissionMode: "trust",
+    maxTurns: 1,
+  })) {
+    events.push(ev);
+  }
+
+  assert.ok(events.some((e) => e.type === "error" && /No response received/.test(e.message)));
+});
+
 // ── Error recovery ──
+
+test("query: task persistence nudges unresolved action prefaces into tool use", async () => {
+  const provider = createMockProvider([
+    textResponseEvents("Let me find and read the files first."),
+    toolCallEvents("MockTool", { input: "files" }),
+    [],
+  ]);
+  const mockTool = createMockTool("MockTool", { result: { output: "read files", isError: false } });
+  const events: any[] = [];
+
+  for await (const ev of query("combine the files", {
+    provider,
+    tools: [mockTool],
+    systemPrompt: "test",
+    permissionMode: "trust",
+    maxTurns: 4,
+    taskPersistence: true,
+  })) {
+    events.push(ev);
+  }
+
+  assert.match(provider.calls[0]!.systemPrompt, /Task Persistence/);
+  assert.equal(provider.calls.length >= 2, true);
+  assert.ok(events.some((e) => e.type === "tool_call_end" && e.callId === "call-1"));
+});
 
 test("query: injects dirty tree context and tracks carried-forward files between prompts", async () => {
   let status = " M src/app.ts\n";

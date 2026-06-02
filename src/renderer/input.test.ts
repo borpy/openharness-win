@@ -94,11 +94,13 @@ describe("parseKey", () => {
   it("parses mouse click as generic mouse event", () => {
     const { event } = parseKey("\x1b[<0;10;5M", 0);
     assert.strictEqual(event.name, "mouse");
+    assert.deepStrictEqual(event.mouse, { button: 0, col: 10, row: 5, released: false });
   });
 
   it("parses mouse release (lowercase m)", () => {
     const { event } = parseKey("\x1b[<0;10;5m", 0);
     assert.strictEqual(event.name, "mouse");
+    assert.deepStrictEqual(event.mouse, { button: 0, col: 10, row: 5, released: true });
   });
 
   it("handles partial SGR mouse sequence without crashing", () => {

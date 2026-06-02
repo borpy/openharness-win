@@ -71,6 +71,18 @@ describe("handleUserInput", () => {
     const lastMsg = result.messages[result.messages.length - 1]!;
     assert.ok(lastMsg.content.includes("Unknown command"));
   });
+
+  it("/permissions returns the new permission mode to the REPL", async () => {
+    const result = await handleUserInput("/permissions acceptEdits", makeCtx());
+    assert.strictEqual(result.handled, true);
+    assert.strictEqual(result.newPermissionMode, "acceptEdits");
+  });
+
+  it("/persist returns the new task persistence state to the REPL", async () => {
+    const result = await handleUserInput("/persist off", makeCtx({ taskPersistence: true }));
+    assert.strictEqual(result.handled, true);
+    assert.strictEqual(result.taskPersistence, false);
+  });
 });
 
 describe("hidden screenshot context", () => {

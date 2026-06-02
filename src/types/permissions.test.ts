@@ -52,6 +52,14 @@ test("acceptEdits auto-approves FileEdit", () => {
   assert.equal(r.reason, "acceptEdits-auto");
 });
 
+test("acceptEdits auto-approves current file write tools", () => {
+  for (const toolName of ["Write", "Edit", "MultiEdit"]) {
+    const r = checkPermission("acceptEdits", "medium", false, toolName);
+    assert.equal(r.allowed, true, `${toolName} should be allowed`);
+    assert.equal(r.reason, "acceptEdits-auto");
+  }
+});
+
 test("acceptEdits requires approval for Bash", () => {
   const r = checkPermission("acceptEdits", "high", false, "Bash");
   assert.equal(r.allowed, false);

@@ -78,14 +78,20 @@ export type AskUserFn = (toolName: string, description: string, riskLevel?: Risk
 
 /** Tools auto-approved in acceptEdits mode */
 const EDIT_SAFE_TOOLS = new Set([
-  "FileRead",
-  "FileWrite",
-  "FileEdit",
+  // Current OpenHarness tool names
+  "Read",
+  "Write",
+  "Edit",
+  "MultiEdit",
   "Glob",
   "Grep",
   "LS",
   "ImageRead",
   "NotebookEdit",
+  // Legacy aliases retained for existing tests/configs.
+  "FileRead",
+  "FileWrite",
+  "FileEdit",
 ]);
 
 /** Parse a tool specifier like "Bash(npm run *)" into tool name + pattern */

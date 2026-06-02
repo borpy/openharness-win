@@ -15,6 +15,7 @@ export const DESKTOP_IPC_CHANNELS = [
   "terminal:state",
   "status:snapshot",
   "ollama:pull-default",
+  "ollama:start-server",
   "window:minimize",
   "window:toggle-maximize",
   "window:close",

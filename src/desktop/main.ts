@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from "electron";
 import * as pty from "node-pty";
 import { createDesktopStatusWriter, type DesktopStatusSnapshot } from "../harness/desktop-status.js";
+import { startOllamaServer } from "../providers/ollama-control.js";
 import { DEFAULT_LOCAL_OLLAMA_MODEL } from "../providers/ollama-defaults.js";
 import { validatePtySize, validateSlashCommand, validateTerminalWrite, validateWorkspacePath } from "./ipc.js";
 import { assertPtyRuntimeAvailable, buildDesktopPtyLaunch } from "./pty.js";
@@ -268,6 +269,16 @@ function registerIpc(): void {
   ipcMain.handle("ollama:pull-default", () => {
     terminal?.write(`/ollama pull ${DEFAULT_LOCAL_OLLAMA_MODEL}\r`);
     return terminalState();
+  });
+  ipcMain.handle("ollama:start-server", async () => {
+    const settings = readSettings();
+    const currentStatus = await readDesktopOllamaStatus(lastSnapshot?.model || settings.activeOllamaModel);
+    const result = await startOllamaServer({ baseUrl: currentStatus.baseUrl });
+    mainWindow?.webContents.send("terminal:data", `\r\n[desktop] ${result.message}\r\n`);
+    if (result.ok && terminal) {
+      terminal.write(`/ollama refresh\r`);
+    }
+    return refreshStatus();
   });
   ipcMain.handle("window:minimize", () => mainWindow?.minimize());
   ipcMain.handle("window:toggle-maximize", () => {

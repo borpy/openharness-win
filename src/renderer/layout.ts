@@ -98,7 +98,95 @@ export type LayoutState = {
   thinkingExpanded: boolean;
   lastThinkingSummary: string | null;
   notifications: Array<{ text: string }>;
+  compactMode?: boolean;
+  compactExpandedMessages?: Set<string>;
+  compactSelectedMessageKey?: string | null;
+  compactDisclosureRows?: Map<number, string>;
 };
+
+function compactMessageKey(message: Message, index: number): string {
+  return message.uuid || `${message.timestamp}:${index}`;
+}
+
+function latestAssistantKey(messages: readonly Message[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]!;
+    if (!msg.meta?.hidden && msg.role === "assistant") return compactMessageKey(msg, i);
+  }
+  return null;
+}
+
+function firstContentLine(content: string): string {
+  return (
+    content
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? ""
+  );
+}
+
+function renderCompactTranscript(state: LayoutState, grid: CellGrid, r: number, limit: number): number {
+  if (!state.compactMode) return r;
+  const w = grid.width;
+  const rows = state.compactDisclosureRows;
+  rows?.clear();
+  const latestKey = latestAssistantKey(state.messages);
+  const expanded = state.compactExpandedMessages ?? new Set<string>();
+  const visibleMessages = state.messages.filter((msg) => !msg.meta?.hidden && msg.role !== "tool").slice(-80);
+
+  if (r < limit) {
+    grid.writeTextClipped(
+      r,
+      0,
+      "Compact view: older assistant replies are folded. /compact off restores transcript view.",
+      S_DIM,
+    );
+    r++;
+  }
+
+  for (let i = 0; i < visibleMessages.length && r < limit; i++) {
+    const msg = visibleMessages[i]!;
+    const originalIndex = state.messages.indexOf(msg);
+    const key = compactMessageKey(msg, originalIndex >= 0 ? originalIndex : i);
+
+    if (msg.role === "user") {
+      const summary = firstContentLine(msg.content) || "(empty prompt)";
+      grid.writeTextClipped(r, 0, `> ${summary}`, S_USER);
+      r++;
+      continue;
+    }
+
+    if (msg.role === "system") {
+      if (msg.meta?.isInfo) {
+        grid.writeTextClipped(r, 0, `  ${firstContentLine(msg.content) || msg.content}`.slice(0, w), S_DIM);
+        r++;
+      }
+      continue;
+    }
+
+    if (msg.role !== "assistant") continue;
+    const isLatest = key === latestKey;
+    const isExpanded = isLatest || expanded.has(key);
+    rows?.set(r, key);
+    const marker = isExpanded ? "v" : ">";
+    const summary =
+      firstContentLine(msg.content) ||
+      (msg.toolCalls?.length ? `${msg.toolCalls.length} tool call(s)` : "(empty reply)");
+    const selected = key === state.compactSelectedMessageKey;
+    grid.writeTextClipped(r, 0, `${marker} `, selected ? S_USER : S_ASSISTANT);
+    grid.writeTextClipped(r, 2, summary.slice(0, Math.max(0, w - 3)), selected ? S_USER : S_TEXT);
+    r++;
+
+    if (isExpanded && msg.content && r < limit) {
+      const before = r;
+      r += renderMarkdown(grid, r, 2, msg.content, Math.max(10, w - 2), state.codeBlocksExpanded, limit);
+      if (r === before) r++;
+    }
+  }
+
+  if (r < limit) r++;
+  return r;
+}
 
 // ── Main rasterization functions ──
 
@@ -385,8 +473,12 @@ export function rasterizeLive(state: LayoutState, grid: CellGrid): { cursorRow: 
   const h = grid.height;
   let r = 0;
 
+  if (state.compactMode) {
+    r = renderCompactTranscript(state, grid, r, h - 4);
+  }
+
   // Banner (shown when no messages have been flushed yet)
-  if (state.bannerLines && state.messages.length === 0 && !state.loading) {
+  if (!state.compactMode && state.bannerLines && state.messages.length === 0 && !state.loading) {
     r = renderBannerSection(state, grid, r, h - 4, { compact: h < 15 });
   }
 

@@ -92,6 +92,10 @@ export class TerminalRenderer {
       thinkingExpanded: false,
       lastThinkingSummary: null,
       notifications: [],
+      compactMode: false,
+      compactExpandedMessages: new Set(),
+      compactSelectedMessageKey: null,
+      compactDisclosureRows: new Map(),
     };
   }
 
@@ -158,6 +162,7 @@ export class TerminalRenderer {
     // Reset flush counter if messages array was replaced (e.g., session resume)
     if (msgs.length < this.flushedMessageCount) this.flushedMessageCount = 0;
     this.state.messages = msgs;
+    if (this.state.compactMode) this.flushedMessageCount = msgs.length;
     this.scheduleRender();
   }
   setStreamingText(text: string): void {
@@ -361,6 +366,98 @@ export class TerminalRenderer {
     this.scheduleRender();
   }
 
+  private compactAssistantIds(includeLatest = false): string[] {
+    const ids: string[] = [];
+    let latest: string | null = null;
+    for (let i = 0; i < this.state.messages.length; i++) {
+      const msg = this.state.messages[i]!;
+      if (msg.meta?.hidden || msg.role !== "assistant") continue;
+      const id = msg.uuid || `${msg.timestamp}:${i}`;
+      ids.push(id);
+      latest = id;
+    }
+    return includeLatest ? ids : ids.filter((id) => id !== latest);
+  }
+
+  private latestCompactAssistantId(): string | null {
+    for (let i = this.state.messages.length - 1; i >= 0; i--) {
+      const msg = this.state.messages[i]!;
+      if (msg.meta?.hidden || msg.role !== "assistant") continue;
+      return msg.uuid || `${msg.timestamp}:${i}`;
+    }
+    return null;
+  }
+
+  private resetTerminalSurface(): void {
+    if (!this.started) return;
+    syncWrite("\x1b[?25l\x1b[2J\x1b[3J\x1b[H");
+    this.lastLiveLines = 0;
+    this.current = new CellGrid(process.stdout.columns ?? 80, process.stdout.rows ?? 24);
+  }
+
+  enableCompactMode(): void {
+    const latest = this.latestCompactAssistantId();
+    this.state.compactMode = true;
+    this.state.compactExpandedMessages = new Set(latest ? [latest] : []);
+    this.state.compactSelectedMessageKey = null;
+    this.state.compactDisclosureRows = new Map();
+    this.flushedMessageCount = this.state.messages.length;
+    this.flushedToolCallIds.clear();
+    this.resetTerminalSurface();
+    this.scheduleRender();
+  }
+
+  disableCompactMode(): void {
+    this.state.compactMode = false;
+    this.state.compactExpandedMessages = new Set();
+    this.state.compactSelectedMessageKey = null;
+    this.state.compactDisclosureRows = new Map();
+    this.flushedMessageCount = 0;
+    this.flushedToolCallIds.clear();
+    this.resetTerminalSurface();
+    this.scheduleRender();
+  }
+
+  isCompactMode(): boolean {
+    return this.state.compactMode === true;
+  }
+
+  cycleCompactDisclosure(): boolean {
+    if (!this.state.compactMode) return false;
+    const ids = this.compactAssistantIds(false);
+    if (ids.length === 0) return false;
+    const currentIdx = this.state.compactSelectedMessageKey ? ids.indexOf(this.state.compactSelectedMessageKey) : -1;
+    const next = ids[(currentIdx + 1) % ids.length]!;
+    this.state.compactSelectedMessageKey = next;
+    this.toggleCompactMessage(next);
+    return true;
+  }
+
+  private toggleCompactMessage(id: string): void {
+    const latest = this.latestCompactAssistantId();
+    if (id === latest) {
+      this.state.compactExpandedMessages?.add(id);
+      this.scheduleRender();
+      return;
+    }
+    const expanded = this.state.compactExpandedMessages ?? new Set<string>();
+    if (expanded.has(id)) expanded.delete(id);
+    else expanded.add(id);
+    this.state.compactExpandedMessages = expanded;
+    this.scheduleRender();
+  }
+
+  toggleCompactAtMouse(key: KeyEvent): boolean {
+    if (!this.state.compactMode || key.name !== "mouse" || !key.mouse || key.mouse.released) return false;
+    if (key.mouse.button !== 0) return false;
+    const row = Math.max(0, key.mouse.row - 1);
+    const id = this.state.compactDisclosureRows?.get(row);
+    if (!id) return false;
+    this.state.compactSelectedMessageKey = id;
+    this.toggleCompactMessage(id);
+    return true;
+  }
+
   /** Show permission prompt and wait for Y/N response */
   askPermission(toolName: string, description: string, riskLevel: string): Promise<boolean> {
     this.permissionPrompt = { toolName, description, riskLevel };
@@ -539,6 +636,7 @@ export class TerminalRenderer {
 
   /** Flush completed messages to terminal scrollback (native scrollbar) */
   flushMessages(): void {
+    if (this.state.compactMode) return;
     const messages = this.state.messages;
     let didFlush = false;
     const textWidth = this.flushTextWidth();
@@ -660,6 +758,7 @@ export class TerminalRenderer {
 
   /** Check if there are messages pending flush (without flushing) */
   private hasPendingFlush(): boolean {
+    if (this.state.compactMode) return false;
     if (this.flushedMessageCount >= this.state.messages.length) return false;
     const msg = this.state.messages[this.flushedMessageCount]!;
     if (this.state.loading && this.flushedMessageCount === this.state.messages.length - 1 && msg.meta?.isStreaming)
@@ -670,6 +769,8 @@ export class TerminalRenderer {
   /** Estimate the height needed for the live area */
   private calculateLiveHeight(): number {
     let rows = 3; // border + input + hints (minimum)
+    const h = process.stdout.rows ?? 24;
+    if (this.state.compactMode) return h;
     // Banner only shown when no messages and not loading (must match rasterizeLive condition)
     if (this.state.bannerLines && this.state.messages.length === 0 && !this.state.loading) {
       rows += this.state.bannerLines.length + 1;
@@ -698,7 +799,6 @@ export class TerminalRenderer {
     if (this.state.companionLines) rows = Math.max(rows, this.state.companionLines.length + 2);
     const inputLineCount = Math.min(5, (this.state.inputText.match(/\n/g)?.length ?? 0) + 1);
     rows += inputLineCount - 1;
-    const h = process.stdout.rows ?? 24;
     // On initial screen with banner, fill the terminal
     if (this.state.bannerLines && this.state.messages.length === 0 && !this.state.loading) {
       return h;

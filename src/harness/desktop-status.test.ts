@@ -14,6 +14,7 @@ function snapshot(overrides: Partial<DesktopStatusSnapshot> = {}): DesktopStatus
     model: "ollama/qwen3:4b",
     providerName: "ollama",
     permissionMode: "ask",
+    taskPersistence: true,
     loading: false,
     queueLength: 0,
     messageCount: 2,
@@ -80,6 +81,7 @@ test("desktop status writer writes atomic JSON snapshots", () => {
   assert.equal(written.timestamp, 2000);
   assert.equal(written.sessionId, "abc123");
   assert.equal(written.model, "ollama/qwen3:4b");
+  assert.equal(written.taskPersistence, true);
   assert.equal("messages" in written, false);
   assert.equal("content" in written, false);
 });

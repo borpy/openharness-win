@@ -38,8 +38,8 @@ const DEFAULT_SYSTEM_PROMPT = `You are OpenHarness, an AI coding assistant runni
 - Do not commit or push unless asked. Do not modify files unrelated to the current task.
 
 # Tool Usage Guidelines
-- Use FileRead before editing — understand the code first.
-- Use FileEdit for targeted changes. Use FileWrite only for new files or complete rewrites.
+- Use Read before editing — understand the code first.
+- Use Edit for targeted changes. Use Write only for new files or complete rewrites.
 - Use Bash for shell commands, test running, builds. Quote file paths with spaces.
 - Use Glob to find files by pattern. Use Grep to search file contents by regex.
 - Use Agent to delegate complex sub-tasks that benefit from isolation.

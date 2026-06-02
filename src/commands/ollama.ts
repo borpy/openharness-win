@@ -6,6 +6,7 @@ import {
   normalizeOllamaBaseUrl,
   normalizeOllamaModelName,
   pullOllamaModel,
+  startOllamaServer,
   testOllamaGenerate,
 } from "../providers/ollama-control.js";
 import { DEFAULT_LOCAL_OLLAMA_MODEL } from "../providers/ollama-defaults.js";
@@ -25,6 +26,7 @@ function usage(): string {
     "  /ollama models              List installed models",
     "  /ollama switch <model>      Switch active model in this Ollama session",
     `  /ollama pull [model]        Pull a model (default: ${DEFAULT_LOCAL_OLLAMA_MODEL})`,
+    "  /ollama start               Start local Ollama with `ollama serve` and wait for readiness",
     "  /ollama diagnose [model]    Check server, model list, and generate request",
     "  /ollama poll [n] [ms]       Poll server n times at interval ms",
   ].join("\n");
@@ -95,6 +97,12 @@ export function registerOllamaCommands(register: (name: string, description: str
       const model = normalizeOllamaModelName(rest[0]) || DEFAULT_LOCAL_OLLAMA_MODEL;
       const result = await pullOllamaModel({ baseUrl, model });
       return { output: result.message, handled: true };
+    }
+
+    if (action === "start") {
+      const start = await startOllamaServer({ baseUrl });
+      const status = await fetchOllamaStatus({ baseUrl, currentModel });
+      return { output: `${start.message}\n\n${formatOllamaControlPanel(status)}`, handled: true };
     }
 
     if (action === "diagnose" || action === "test") {

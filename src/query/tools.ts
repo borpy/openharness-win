@@ -402,6 +402,10 @@ export async function* executeToolCalls(
         const tc = batch.calls[i]!;
         const result = results[i]!;
         yield { type: "tool_call_end", callId: tc.id, output: result.output, isError: result.isError };
+        if (state) {
+          state.lastTurnHadToolResults = true;
+          if (!result.isError) state.lastTurnHadSuccessfulTool = true;
+        }
         state?.messages.push(
           createToolResultMessage({ callId: tc.id, output: result.output, isError: result.isError }),
         );
@@ -418,6 +422,10 @@ export async function* executeToolCalls(
         );
         for (const chunk of childEvents.splice(0)) yield chunk;
         yield { type: "tool_call_end", callId: tc.id, output: result.output, isError: result.isError };
+        if (state) {
+          state.lastTurnHadToolResults = true;
+          if (!result.isError) state.lastTurnHadSuccessfulTool = true;
+        }
         state?.messages.push(
           createToolResultMessage({ callId: tc.id, output: result.output, isError: result.isError }),
         );

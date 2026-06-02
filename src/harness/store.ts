@@ -23,6 +23,7 @@ export type REPLState = {
   // UI modes
   vimMode: "normal" | "insert" | null;
   fastMode: boolean;
+  taskPersistence: boolean;
   companionVisible: boolean;
 
   // Autocomplete
@@ -51,6 +52,7 @@ export function createInitialState(overrides?: Partial<REPLState>): REPLState {
     historyIndex: -1,
     vimMode: null,
     fastMode: false,
+    taskPersistence: true,
     companionVisible: true,
     acSuggestions: [],
     acDescriptions: [],

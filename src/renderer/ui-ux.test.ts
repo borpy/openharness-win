@@ -542,6 +542,44 @@ describe("Status line", () => {
     assert.ok(row >= 0, "Status line not found");
     assert.ok(gridText(grid, row).includes("$0.0042"), "Cost not in status line");
   });
+
+  it("clips long live status lines without wrapping into the prompt row", () => {
+    const state = makeState({
+      statusLine: `model | ${"very-long-status ".repeat(20)}`,
+      inputText: "next prompt",
+      inputCursor: "next prompt".length,
+    });
+    const grid = new CellGrid(38, 8);
+    rasterizeLive(state, grid);
+    const statusRow = findRow(grid, "model");
+    const promptRow = findRow(grid, "next prompt");
+    assert.ok(statusRow >= 0, "Status row not found");
+    assert.ok(promptRow > statusRow, "Prompt row should be reserved below status");
+    assert.equal(/very-long-status.*very-long-status/.test(gridText(grid, promptRow)), false);
+  });
+
+  it("renders compact transcript disclosure rows", () => {
+    const oldReply = createAssistantMessage("old reply\nwith detail");
+    const latestReply = createAssistantMessage("latest reply\nstill expanded");
+    const disclosureRows = new Map<number, string>();
+    const state = makeState({
+      messages: [createUserMessage("first"), oldReply, createUserMessage("second"), latestReply],
+      compactMode: true,
+      compactExpandedMessages: new Set([latestReply.uuid]),
+      compactDisclosureRows: disclosureRows,
+    });
+    const grid = new CellGrid(80, 18);
+    rasterizeLive(state, grid);
+
+    const oldRow = findRow(grid, "old reply");
+    const latestRow = findRow(grid, "latest reply");
+    assert.ok(oldRow >= 0, "Old assistant reply not found");
+    assert.ok(latestRow >= 0, "Latest assistant reply not found");
+    assert.ok(gridText(grid, oldRow).startsWith(">"), "Old reply should default collapsed");
+    assert.ok(gridText(grid, latestRow).startsWith("v"), "Latest reply should stay expanded");
+    assert.equal(disclosureRows.get(oldRow), oldReply.uuid);
+    assert.equal(disclosureRows.get(latestRow), latestReply.uuid);
+  });
 });
 
 // ── 14. rasterize vs rasterizeLive parity ──

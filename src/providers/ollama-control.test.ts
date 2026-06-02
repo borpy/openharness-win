@@ -5,7 +5,9 @@ import {
   formatOllamaControlPanel,
   normalizeOllamaBaseUrl,
   normalizeOllamaModelName,
+  ollamaStartBlockers,
   pullOllamaModel,
+  startOllamaServer,
   testOllamaGenerate,
 } from "./ollama-control.js";
 
@@ -63,9 +65,15 @@ test("fetchOllamaStatus reports offline blocker", async () => {
   });
 
   assert.equal(status.alive, false);
+  assert.equal(status.startable, true);
   assert.match(status.blockers.join("\n"), /not responding/);
-  assert.match(status.recommendations.join("\n"), /ollama serve/);
+  assert.match(status.recommendations.join("\n"), /\/ollama start/);
   assert.match(formatOllamaControlPanel(status), /Server:\s+offline/);
+});
+
+test("ollamaStartBlockers refuses remote hosts", () => {
+  assert.deepEqual(ollamaStartBlockers("http://localhost:11434"), []);
+  assert.match(ollamaStartBlockers("http://ollama.example.com:11434").join("\n"), /remote host/);
 });
 
 test("fetchOllamaStatus reports missing selected model", async () => {
@@ -112,4 +120,65 @@ test("pullOllamaModel calls the pull API", async () => {
   assert.equal(result.ok, true);
   assert.equal(body.name, "qwen3:4b");
   assert.equal(body.stream, false);
+});
+
+test("startOllamaServer refuses remote hosts without spawning", async () => {
+  let spawned = false;
+  const result = await startOllamaServer({
+    baseUrl: "http://ollama.example.com:11434",
+    spawnImpl: (() => {
+      spawned = true;
+      throw new Error("should not spawn");
+    }) as any,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(spawned, false);
+  assert.match(result.message, /remote host/);
+});
+
+test("startOllamaServer reports missing executable", async () => {
+  const result = await startOllamaServer({
+    baseUrl: "http://localhost:11434",
+    fetchImpl: async () => {
+      throw new Error("ECONNREFUSED");
+    },
+    spawnImpl: (() => {
+      throw new Error("ollama not found");
+    }) as any,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.message, /ollama not found/);
+});
+
+test("startOllamaServer polls until local server is online", async () => {
+  let fetchCount = 0;
+  let spawned = false;
+  const child = {
+    pid: 1234,
+    once() {
+      return child;
+    },
+    unref() {},
+  };
+  const result = await startOllamaServer({
+    baseUrl: "http://localhost:11434",
+    timeoutMs: 50,
+    pollIntervalMs: 1,
+    fetchImpl: async () => {
+      fetchCount++;
+      if (fetchCount === 1) throw new Error("offline");
+      return jsonResponse({ version: "0.9.0" });
+    },
+    spawnImpl: (() => {
+      spawned = true;
+      return child;
+    }) as any,
+  });
+
+  assert.equal(spawned, true);
+  assert.equal(result.ok, true);
+  assert.equal(result.pid, 1234);
+  assert.ok(fetchCount >= 2);
 });
