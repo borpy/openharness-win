@@ -1,6 +1,6 @@
 # @zhijiewang/openharness-sdk
 
-TypeScript SDK for [openHarness](https://github.com/zhijiewong/openharness). Drive the `oh` terminal coding agent from Node.js — stream tokens and tool calls, control models and permissions, all with a small async API.
+TypeScript SDK for [openHarness](https://github.com/borpy/openharness). Drive the `oh` terminal coding agent from Node.js — stream tokens and tool calls, control models and permissions, all with a small async API.
 
 This package mirrors the [Python SDK](https://pypi.org/project/openharness-sdk/) (`openharness-sdk` 0.5.0) and follows its own independent SemVer track.
 

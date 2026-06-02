@@ -1,5 +1,31 @@
 # Changelog
 
+## OpenHarness for Windows v1.0 (2026-06-03) - Windows desktop fork release
+
+First public Win64 desktop release for this Windows-first fork. This release is separate from the upstream npm package version line: the bundled CLI runtime remains `2.47.0`, while `v1.0` is the Windows desktop release label for `borpy/openharness`.
+
+### Why this matters strategically
+The point of this fork is to make OpenHarness easy for Windows users: download a zip, launch a desktop app, pick a workspace, and use local Ollama plus GitHub-aware coding workflows without hand-assembling a terminal setup, Node runtime, native PTY dependency, status scripts, and model diagnostics.
+
+### Added
+- **OpenHarness for Windows desktop app** - Electron shell with a custom Windows-style frame, real embedded `oh` terminal, and 75/25 terminal/toolbox layout.
+- **Workspace-first launch** - first-run folder picker, recent workspaces, non-git folder support, and git-unavailable status instead of hard failure.
+- **Ollama control panel** - online/offline polling, local server startup, model dropdown switching, diagnostics, default model pull, and model readiness checks.
+- **GitHub/Git toolbox** - branch, dirty tree counts, upstream/base diff, GitHub CLI auth status, and buttons for status, diff, push, PR view, and PR create.
+- **Live dials** - context used/max, RAM, VRAM including AMD Windows telemetry, tokens in/out, output tokens/sec, elapsed time, TTFT, and cost.
+- **Workflow controls** - prompt queueing, compact replies, pasted screenshot context, file-write permission toggle, task-persistence toggle, recent tools, and session history.
+
+### Changed
+- Windows packaging now produces `OpenHarness-for-Windows-v1.0-win32-x64.zip` with `OpenHarness for Windows.exe` as the primary app.
+- The generated Windows bundle README now explains the fork's Windows purpose, Ollama/GitHub prerequisites, desktop toolbox, CLI launchers, and release URL.
+- Public documentation now points fork-specific GitHub links to `borpy/openharness` while retaining the existing npm package name for CLI/npm installation.
+
+### Verification
+- `npm run typecheck`
+- `npm run lint`
+- `npm run package:windows`
+- Windows package smoke verified the zip and staged executable.
+
 ## 2.47.0 (2026-05-11) — ACP `session/load` capability
 
 Last of the four ACP-server gaps. `oh acp` now advertises `loadSession: true` and implements the `session/load` handler — editors can resume a prior session by reusing its sessionId, and the agent restores the full message history from OH's existing `~/.oh/sessions/` store via the `priorMessages` SDK config. **All ACP tests pass** (38 in `src/acp/agent.test.ts`; +3 new); typecheck clean.

@@ -85,7 +85,7 @@ openHarness auto-discovers plugins from `node_modules/` on startup.
 Marketplaces are curated plugin catalogs. Add the official marketplace:
 
 ```
-/plugins marketplace add zhijiewong/openharness
+/plugins marketplace add borpy/openharness
 ```
 
 Then browse and install:

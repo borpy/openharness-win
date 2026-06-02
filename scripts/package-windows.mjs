@@ -14,6 +14,8 @@ const windowsProductName = "OpenHarness for Windows";
 const windowsReleaseVersion = "1.0";
 const windowsReleaseLabel = `v${windowsReleaseVersion}`;
 const windowsExeName = `${windowsProductName}.exe`;
+const windowsReleaseTag = "openharness-win64-v1.0";
+const windowsReleaseUrl = `https://github.com/borpy/openharness/releases/tag/${windowsReleaseTag}`;
 const arch = process.arch === "arm64" ? "arm64" : "x64";
 const releaseDir = join(root, "release");
 const stageDir = join(releaseDir, `OpenHarness-for-Windows-${windowsReleaseLabel}-win32-${arch}`);
@@ -117,17 +119,28 @@ function writeLaunchers() {
       "Desktop app:",
       `  .\\${windowsExeName}`,
       "",
+      "This is the Windows-first OpenHarness fork release for users who want a portable desktop app instead of wiring up a terminal stack by hand.",
       "The desktop app opens a real OpenHarness CLI terminal and a right-side toolbox.",
       "Choose a workspace on first launch. Recent workspaces are stored under Electron userData.",
+      "",
+      "Toolbox highlights:",
+      "  - Ollama online/offline status, local server start, model switching, diagnostics, and default-model pulls",
+      "  - GitHub/Git branch, dirty tree, upstream/base diff, gh auth, push, and PR shortcuts",
+      "  - Context, RAM, VRAM, tokens in/out, output tokens/sec, elapsed time, TTFT, and cost",
+      "  - File-write permission and task-persistence toggles",
+      "  - Prompt queue, compact transcript controls, screenshot context, history, and recent tools",
       "",
       "Direct CLI access is still bundled:",
       "  .\\oh.cmd",
       "  .\\oh.cmd --model ollama/qwen3:4b",
       "",
       `Bundled CLI runtime version: ${packageVersion}`,
+      `Windows release: ${windowsProductName} ${windowsReleaseLabel}`,
+      `Release page: ${windowsReleaseUrl}`,
       "",
       "This bundle includes Electron, node.exe, the OpenHarness CLI runtime, and production npm dependencies.",
       "Local Ollama works out of the box when Ollama is running on http://localhost:11434.",
+      "When Ollama is installed locally, the desktop app can attempt to start it with ollama serve.",
       "GitHub workflows require git plus GitHub CLI authentication: gh auth login",
       "",
     ].join("\r\n"),

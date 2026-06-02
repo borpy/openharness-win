@@ -98,12 +98,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/zhijiewong/openharness"
+    "url": "https://github.com/borpy/openharness"
   },
   "bugs": {
-    "url": "https://github.com/zhijiewong/openharness/issues"
+    "url": "https://github.com/borpy/openharness/issues"
   },
-  "homepage": "https://github.com/zhijiewong/openharness#readme",
+  "homepage": "https://github.com/borpy/openharness#readme",
   "optionalDependencies": {
     "@agentclientprotocol/sdk": "^0.21.0",
     "@anthropic-ai/sandbox-runtime": "^0.0.49",

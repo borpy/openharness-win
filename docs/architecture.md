@@ -15,6 +15,8 @@ User Input → REPL → Query Engine → LLM Provider → Model
                Permission Check → Hooks → Verification
 ```
 
+The Windows desktop build wraps the same REPL loop in an Electron shell. The left pane is a real PTY running `oh chat`; the right toolbox reads side-channel status snapshots and sends safe slash commands or PTY controls back to the terminal.
+
 ## Core Loop
 
 The **query engine** (`src/query/index.ts`) runs a ReAct loop:
@@ -37,6 +39,8 @@ The **query engine** (`src/query/index.ts`) runs a ReAct loop:
 | `src/renderer/` | Terminal UI (60fps batched rendering) |
 | `src/mcp/` | Model Context Protocol integration |
 | `src/remote/` | HTTP/WebSocket server with auth |
+| `src/desktop/` | Windows desktop shell, PTY launch, IPC validation, workspace settings, Ollama/GitHub/runtime toolbox data |
+| `desktop/renderer/` | Electron renderer for the terminal pane, Windows app frame, and right-side toolbox |
 
 ## Tool Execution
 

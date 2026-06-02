@@ -7,12 +7,32 @@ title: Getting Started
 
 ## Installation
 
+### Windows desktop, recommended for this fork
+
+Download the Win64 zip from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract it, and run:
+
+```powershell
+.\OpenHarness for Windows.exe
+```
+
+The desktop app opens the real `oh` CLI in an embedded terminal and adds a right-side toolbox for workspace selection, Ollama status/model switching, GitHub/Git status, context and resource dials, file-write permissions, task persistence, queue controls, and recent sessions.
+
+For local no-key use, install Ollama and pull a model:
+
+```powershell
+ollama pull qwen3:4b
+```
+
+The desktop toolbox can poll Ollama, attempt to start a local `ollama serve`, switch installed models, diagnose request blockers, and pull the default model.
+
+### CLI/npm
+
 ```bash
 # From npm (recommended)
 npm install -g @zhijiewang/openharness
 
 # From source
-git clone https://github.com/zhijiewong/openharness.git
+git clone https://github.com/borpy/openharness.git
 cd openharness
 npm install && npm run build
 npm link
@@ -20,14 +40,14 @@ npm link
 
 Requires Node.js 18+.
 
-On Windows, build a portable zip from source:
+On Windows, build the desktop zip from source:
 
 ```powershell
 npm ci
 npm run package:windows
 ```
 
-The artifact is written under `release/` and includes `node.exe` plus `oh.cmd` launchers.
+The artifact is written under `release/` as `OpenHarness-for-Windows-v1.0-win32-x64.zip`. It includes `OpenHarness for Windows.exe`, Electron, `node.exe`, production dependencies, direct CLI launchers, and the embedded CLI runtime.
 
 ## First Run
 
@@ -70,8 +90,10 @@ Rules are loaded into every session automatically.
 | `/status` | Model, mode, git branch, MCP servers |
 | `/doctor` | Run health checks |
 | `/ollama` | Poll Ollama, inspect/switch/pull models, and diagnose serving blockers |
+| `/ollama start` | Start a local Ollama server when the target is local and the executable is available |
 | `/paste-image` | Attach a copied screenshot/image as hidden model context |
 | `/queue` | Show queued prompts; `/queue run` resumes and `/queue clear` drops pending prompts |
+| `/compact` | Clear and re-render the visible session with older assistant replies collapsed |
 | `/diff` | Show uncommitted changes |
 | `/undo` | Revert last AI commit |
 | `/rewind` | Restore files from checkpoint |
@@ -85,7 +107,7 @@ Rules are loaded into every session automatically.
 GitHub commands use the GitHub CLI. Install `gh`, run `gh auth login`, then use `/github status` inside a git repo.
 `/github status` shows dirty working tree counts, local-vs-tracking ahead/behind counts, and branch-vs-base diff using already-fetched remote refs.
 
-The status line includes live prompt benchmarks and resource dials while a prompt runs: elapsed time, tokens in/out, output tokens/sec, time to first token, context used/max for the active model, system RAM, and VRAM when `nvidia-smi` is available.
+The status line includes live prompt benchmarks and resource dials while a prompt runs: elapsed time, tokens in/out, output tokens/sec, time to first token, context used/max for the active model, system RAM, and VRAM when supported GPU telemetry is available. The desktop toolbox keeps the detailed readouts visible while the CLI footer stays compact.
 
 When a prompt is already running, submitting another prompt queues it. Queued prompts run in order after each response completes, and local Ollama queues pause if the server/model fails the readiness check. Use `/queue` to inspect pending work.
 

@@ -2,7 +2,7 @@
   <img src="assets/logo-256.png" alt="openHarness logo" width="128" />
 </p>
 
-# OpenHarness
+# OpenHarness for Windows
 
 ```
         ___
@@ -15,13 +15,13 @@
         `--`
 ```
 
-AI coding agent in your terminal. Works with any LLM -- free local models or cloud APIs.
+Windows-first fork of OpenHarness: an AI coding agent that is easy to run on Windows with a bundled desktop app, embedded CLI, local Ollama support, and GitHub-aware workflow tools. It still works with any LLM -- free local models or cloud APIs.
 
 <p align="center">
   <img src="assets/openharness_v0.11.1_4.gif" alt="OpenHarness demo" width="800" />
 </p>
 
-[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1737-brightgreen) ![tools](https://img.shields.io/badge/tools-46-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/zhijiewong/openharness)](https://github.com/zhijiewong/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/zhijiewong/openharness)](https://github.com/zhijiewong/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/zhijiewong/openharness/pulls)
+[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![Windows release](https://img.shields.io/badge/windows-v1.0-blue)](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1737-brightgreen) ![tools](https://img.shields.io/badge/tools-46-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/borpy/openharness)](https://github.com/borpy/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/borpy/openharness)](https://github.com/borpy/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/borpy/openharness/pulls)
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -30,6 +30,7 @@ AI coding agent in your terminal. Works with any LLM -- free local models or clo
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [OpenHarness for Windows v1.0](#openharness-for-windows-v10)
 - [Why OpenHarness?](#why-openharness)
 - [Terminal UI](#terminal-ui)
 - [Tools (46)](#tools-46)
@@ -54,6 +55,26 @@ AI coding agent in your terminal. Works with any LLM -- free local models or clo
 ---
 
 ## Quick Start
+
+### Windows desktop, recommended for this fork
+
+Download the Win64 desktop zip from the [OpenHarness for Windows v1.0 release](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract it, and run:
+
+```powershell
+.\OpenHarness for Windows.exe
+```
+
+Pick a workspace folder on first launch. The app opens the real `oh` CLI inside a Windows desktop frame, with the terminal taking the main pane and a right-side toolbox for Ollama, GitHub, context, performance, permissions, history, and session controls.
+
+For local, no-key use, install [Ollama](https://ollama.com/), then pull a model:
+
+```powershell
+ollama pull qwen3:4b
+```
+
+The desktop toolbox can poll Ollama, start a local Ollama server when possible, switch installed models, diagnose model blockers, and pull the default local model.
+
+### CLI/npm
 
 ```bash
 npm install -g @zhijiewang/openharness
@@ -89,6 +110,25 @@ oh run "review code" --json           # CI/CD with JSON output
 Ctrl+O                                # flush transcript to scrollback for review
 Ctrl+V                                # attach clipboard screenshot/image when available
 ```
+
+## OpenHarness for Windows v1.0
+
+The main point of this fork is making OpenHarness practical for ordinary Windows users. The v1.0 Windows build ships as a portable desktop zip, so users do not have to assemble a terminal stack, Node runtime, native PTY dependency, and local-model workflow by hand.
+
+What the Windows desktop build adds:
+
+- **Windows app frame**: custom dark desktop window with an embedded terminal for the existing `oh` REPL.
+- **75/25 work layout**: CLI-first experience with the terminal on the left and a compact toolbox on the right.
+- **Bundled runtime**: Electron, `node.exe`, production dependencies, `oh.cmd`, and the CLI runtime are included in the zip.
+- **Workspace picker**: first launch asks for a workspace folder, stores recent workspaces, and supports non-git folders while clearly reporting git status.
+- **Local Ollama controls**: live online/offline status, model readiness, model switching, polling, diagnostics, default-model pull, and local `ollama serve` startup.
+- **GitHub/Git awareness**: branch, dirty tree counts, upstream/base diff, `gh` auth status, and buttons for status, diff, push, PR view, and PR create.
+- **Live dials**: context used/max, RAM, VRAM including AMD Windows probes, tokens in/out, output tokens/sec, elapsed time, TTFT, and cost.
+- **Prompt ergonomics**: queued prompts run in order, model health is checked between queued work, previous replies can be compacted, and the status footer stays clipped away from the prompt line.
+- **Safer productivity toggles**: sidebar controls for file-write permissions and task persistence, so chain tasks can continue without repeated approvals when the user chooses that mode.
+- **Screenshot context**: pasted screenshots can be attached as hidden model context without printing image/base64 data into the transcript.
+
+The Windows release is published from this fork at [borpy/openharness](https://github.com/borpy/openharness). The bundled CLI runtime currently remains based on npm package version `2.47.0`; `v1.0` is the Windows desktop release line for this fork.
 
 ## Why OpenHarness?
 
@@ -989,21 +1029,21 @@ Requires **Node.js 18+**.
 npm install -g @zhijiewang/openharness
 
 # From source
-git clone https://github.com/zhijiewong/openharness.git
+git clone https://github.com/borpy/openharness.git
 cd openharness
 npm install && npm install -g .
 ```
 
-### Windows portable zip
+### Windows desktop zip
 
-On Windows, build a portable bundle that includes `node.exe`, production dependencies, and `oh.cmd` launchers:
+For normal Windows use, download the public Win64 asset from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0). From source, build the same desktop bundle with:
 
 ```powershell
 npm ci
 npm run package:windows
 ```
 
-The zip is written to `release/openharness-v<version>-win32-<arch>.zip`.
+The generated zip is written to `release/OpenHarness-for-Windows-v1.0-win32-x64.zip`. The published release asset may use the clearer upload name `OpenHarness-for-Windows-v1.0-win64.zip`.
 
 ## Development
 
@@ -1012,7 +1052,7 @@ npm install
 npx tsx src/main.tsx              # run in dev mode
 npm run typecheck                 # type check
 npm run build:all                 # build CLI and TypeScript SDK
-npm run package:windows           # Windows portable zip
+npm run package:windows           # OpenHarness for Windows desktop zip
 npm test                          # run tests
 ```
 
