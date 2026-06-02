@@ -2,7 +2,7 @@
 
 ## OpenHarness for Windows v1.0 (2026-06-03) - Windows desktop fork release
 
-First public Win64 desktop release for this Windows-first fork. This release is separate from the upstream npm package version line: the bundled CLI runtime remains `2.47.0`, while `v1.0` is the Windows desktop release label for `borpy/openharness`.
+First public Win64 desktop release for this Windows-first fork. This release is separate from the upstream npm package version line: the bundled CLI runtime remains `2.47.0`, while `v1.0` is the Windows desktop release label for `borpy/openharness-win`.
 
 ### Why this matters strategically
 The point of this fork is to make OpenHarness easy for Windows users: download a zip, launch a desktop app, pick a workspace, and use local Ollama plus GitHub-aware coding workflows without hand-assembling a terminal setup, Node runtime, native PTY dependency, status scripts, and model diagnostics.
@@ -18,7 +18,7 @@ The point of this fork is to make OpenHarness easy for Windows users: download a
 ### Changed
 - Windows packaging now produces `OpenHarness-for-Windows-v1.0-win32-x64.zip` with `OpenHarness for Windows.exe` as the primary app.
 - The generated Windows bundle README now explains the fork's Windows purpose, Ollama/GitHub prerequisites, desktop toolbox, CLI launchers, and release URL.
-- Public documentation now points fork-specific GitHub links to `borpy/openharness` while retaining the existing npm package name for CLI/npm installation.
+- Public documentation now points fork-specific GitHub links to `borpy/openharness-win` while retaining the existing npm package name for CLI/npm installation.
 
 ### Verification
 - `npm run typecheck`

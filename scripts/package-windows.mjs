@@ -15,7 +15,7 @@ const windowsReleaseVersion = "1.0";
 const windowsReleaseLabel = `v${windowsReleaseVersion}`;
 const windowsExeName = `${windowsProductName}.exe`;
 const windowsReleaseTag = "openharness-win64-v1.0";
-const windowsReleaseUrl = `https://github.com/borpy/openharness/releases/tag/${windowsReleaseTag}`;
+const windowsReleaseUrl = `https://github.com/borpy/openharness-win/releases/tag/${windowsReleaseTag}`;
 const arch = process.arch === "arm64" ? "arm64" : "x64";
 const releaseDir = join(root, "release");
 const stageDir = join(releaseDir, `OpenHarness-for-Windows-${windowsReleaseLabel}-win32-${arch}`);

@@ -9,7 +9,7 @@ OpenHarness for Windows v1.0 is the Windows-first release of this fork. Its purp
 
 Download the Win64 desktop zip from the public release:
 
-[OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0)
+[OpenHarness for Windows v1.0](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0)
 
 Extract the zip and run:
 

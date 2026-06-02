@@ -11,7 +11,7 @@ title: OpenHarness for Windows
 
 ## Quick Start
 
-On Windows, download [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract the zip, and run `OpenHarness for Windows.exe`.
+On Windows, download [OpenHarness for Windows v1.0](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0), extract the zip, and run `OpenHarness for Windows.exe`.
 
 For CLI/npm use:
 
@@ -54,6 +54,6 @@ oh
 
 ## Links
 
-- [GitHub](https://github.com/borpy/openharness)
+- [GitHub](https://github.com/borpy/openharness-win)
 - [npm](https://www.npmjs.com/package/@zhijiewang/openharness)
-- [Changelog](https://github.com/borpy/openharness/blob/main/CHANGELOG.md)
+- [Changelog](https://github.com/borpy/openharness-win/blob/main/CHANGELOG.md)

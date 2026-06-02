@@ -21,7 +21,7 @@
   <img src="assets/openharness_v0.11.1_4.gif" alt="OpenHarness demo" width="800" />
 </p>
 
-[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![Windows release](https://img.shields.io/badge/windows-v1.0-blue)](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1502-brightgreen) ![tools](https://img.shields.io/badge/tools-44-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/borpy/openharness)](https://github.com/borpy/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/borpy/openharness)](https://github.com/borpy/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/borpy/openharness/pulls)
+[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![Windows release](https://img.shields.io/badge/windows-v1.0-blue)](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1502-brightgreen) ![tools](https://img.shields.io/badge/tools-44-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/borpy/openharness-win)](https://github.com/borpy/openharness-win) [![GitHub issues](https://img.shields.io/github/issues-raw/borpy/openharness-win)](https://github.com/borpy/openharness-win/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/borpy/openharness-win/pulls)
 
 [English](README.md) | **简体中文**
 
@@ -55,7 +55,7 @@
 
 ## 快速开始
 
-Windows desktop: download [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract the zip, and run `OpenHarness for Windows.exe`.
+Windows desktop: download [OpenHarness for Windows v1.0](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0), extract the zip, and run `OpenHarness for Windows.exe`.
 
 ```bash
 npm install -g @zhijiewang/openharness
@@ -940,7 +940,7 @@ CLI 使用场景下约 95% 功能对等。主要优势：兼容任意 LLM（不�
 npm install -g @zhijiewang/openharness
 
 # 从源码安装
-git clone https://github.com/borpy/openharness.git
+git clone https://github.com/borpy/openharness-win.git
 cd openharness
 npm install && npm install -g .
 ```

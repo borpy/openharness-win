@@ -21,7 +21,7 @@ Windows-first fork of OpenHarness: an AI coding agent that is easy to run on Win
   <img src="assets/openharness_v0.11.1_4.gif" alt="OpenHarness demo" width="800" />
 </p>
 
-[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![Windows release](https://img.shields.io/badge/windows-v1.0-blue)](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1737-brightgreen) ![tools](https://img.shields.io/badge/tools-46-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/borpy/openharness)](https://github.com/borpy/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/borpy/openharness)](https://github.com/borpy/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/borpy/openharness/pulls)
+[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![Windows release](https://img.shields.io/badge/windows-v1.0-blue)](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1737-brightgreen) ![tools](https://img.shields.io/badge/tools-46-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/borpy/openharness-win)](https://github.com/borpy/openharness-win) [![GitHub issues](https://img.shields.io/github/issues-raw/borpy/openharness-win)](https://github.com/borpy/openharness-win/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/borpy/openharness-win/pulls)
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -58,7 +58,7 @@ Windows-first fork of OpenHarness: an AI coding agent that is easy to run on Win
 
 ### Windows desktop, recommended for this fork
 
-Download the Win64 desktop zip from the [OpenHarness for Windows v1.0 release](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract it, and run:
+Download the Win64 desktop zip from the [OpenHarness for Windows v1.0 release](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0), extract it, and run:
 
 ```powershell
 .\OpenHarness for Windows.exe
@@ -128,7 +128,7 @@ What the Windows desktop build adds:
 - **Safer productivity toggles**: sidebar controls for file-write permissions and task persistence, so chain tasks can continue without repeated approvals when the user chooses that mode.
 - **Screenshot context**: pasted screenshots can be attached as hidden model context without printing image/base64 data into the transcript.
 
-The Windows release is published from this fork at [borpy/openharness](https://github.com/borpy/openharness). The bundled CLI runtime currently remains based on npm package version `2.47.0`; `v1.0` is the Windows desktop release line for this fork.
+The Windows release is published from this fork at [borpy/openharness-win](https://github.com/borpy/openharness-win). The bundled CLI runtime currently remains based on npm package version `2.47.0`; `v1.0` is the Windows desktop release line for this fork.
 
 ## Why OpenHarness?
 
@@ -1029,14 +1029,14 @@ Requires **Node.js 18+**.
 npm install -g @zhijiewang/openharness
 
 # From source
-git clone https://github.com/borpy/openharness.git
+git clone https://github.com/borpy/openharness-win.git
 cd openharness
 npm install && npm install -g .
 ```
 
 ### Windows desktop zip
 
-For normal Windows use, download the public Win64 asset from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0). From source, build the same desktop bundle with:
+For normal Windows use, download the public Win64 asset from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0). From source, build the same desktop bundle with:
 
 ```powershell
 npm ci

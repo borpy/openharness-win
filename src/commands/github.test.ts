@@ -32,7 +32,7 @@ afterEach(() => {
 function installCommonStatusMock(): void {
   setGitHubCommandRunner((command, args) => {
     const key = [command, ...args].join(" ");
-    if (key === "git remote get-url origin") return ok("git@github.com:borpy/openharness.git\n");
+    if (key === "git remote get-url origin") return ok("git@github.com:borpy/openharness-win.git\n");
     if (key === "git branch --show-current") return ok("feature/github\n");
     if (key === "git rev-parse --abbrev-ref --symbolic-full-name @{u}") return ok("origin/feature/github\n");
     if (key === "git symbolic-ref refs/remotes/origin/HEAD") return ok("refs/remotes/origin/main\n");
@@ -41,9 +41,9 @@ function installCommonStatusMock(): void {
     if (key === "git rev-list --left-right --count HEAD...origin/main") return ok("4\t0\n");
     if (key === "gh --version") return ok("gh version 2.0.0\n");
     if (key === "gh auth status --hostname github.com") return ok("Logged in\n");
-    if (key === "gh repo view borpy/openharness --json nameWithOwner") return ok("{}");
+    if (key === "gh repo view borpy/openharness-win --json nameWithOwner") return ok("{}");
     if (key === "git push --dry-run --porcelain origin HEAD:refs/heads/feature/github") return ok("");
-    if (key.startsWith("gh pr view --repo borpy/openharness --json")) {
+    if (key.startsWith("gh pr view --repo borpy/openharness-win --json")) {
       return ok(JSON.stringify({ number: 7, title: "Command wiring", state: "OPEN", url: "https://x/pr/7" }));
     }
     return fail(`unexpected: ${key}`);
@@ -65,11 +65,11 @@ test("/github status reports repo and current PR", async () => {
 test("/pr list renders pull requests", async () => {
   setGitHubCommandRunner((command, args) => {
     const key = [command, ...args].join(" ");
-    if (key === "git remote get-url origin") return ok("https://github.com/borpy/openharness.git\n");
+    if (key === "git remote get-url origin") return ok("https://github.com/borpy/openharness-win.git\n");
     if (key === "gh --version") return ok("gh version 2.0.0\n");
     if (key === "gh auth status --hostname github.com") return ok("Logged in\n");
-    if (key === "gh repo view borpy/openharness --json nameWithOwner") return ok("{}");
-    if (key.startsWith("gh pr list --repo borpy/openharness --json")) {
+    if (key === "gh repo view borpy/openharness-win --json nameWithOwner") return ok("{}");
+    if (key.startsWith("gh pr list --repo borpy/openharness-win --json")) {
       return ok(JSON.stringify([{ number: 3, title: "List me", state: "OPEN", url: "https://x/pr/3" }]));
     }
     return fail(`unexpected: ${key}`);
@@ -102,7 +102,7 @@ test("/push pushes current branch", async () => {
     calls.push(key);
     if (key === "git push --dry-run --porcelain origin HEAD:refs/heads/feature/github") return ok("");
     if (key === "git branch --show-current") return ok("feature/github\n");
-    if (key === "git remote get-url origin") return ok("https://github.com/borpy/openharness.git\n");
+    if (key === "git remote get-url origin") return ok("https://github.com/borpy/openharness-win.git\n");
     if (key === "git push -u origin feature/github") return ok("");
     return fail(`unexpected: ${key}`);
   });

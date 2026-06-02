@@ -9,7 +9,7 @@ title: Getting Started
 
 ### Windows desktop, recommended for this fork
 
-Download the Win64 zip from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness/releases/tag/openharness-win64-v1.0), extract it, and run:
+Download the Win64 zip from [OpenHarness for Windows v1.0](https://github.com/borpy/openharness-win/releases/tag/openharness-win64-v1.0), extract it, and run:
 
 ```powershell
 .\OpenHarness for Windows.exe
@@ -32,7 +32,7 @@ The desktop toolbox can poll Ollama, attempt to start a local `ollama serve`, sw
 npm install -g @zhijiewang/openharness
 
 # From source
-git clone https://github.com/borpy/openharness.git
+git clone https://github.com/borpy/openharness-win.git
 cd openharness
 npm install && npm run build
 npm link
