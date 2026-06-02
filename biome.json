@@ -7,9 +7,11 @@
 	},
 	"files": {
 		"includes": [
-			"src/**/*.ts",
-			"src/**/*.tsx",
-			"packages/sdk/src/**/*.ts",
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "desktop/renderer/src/**/*.ts",
+      "desktop/renderer/src/**/*.tsx",
+      "packages/sdk/src/**/*.ts",
 			"packages/sdk/test/**/*.ts"
 		]
 	},

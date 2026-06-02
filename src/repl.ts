@@ -16,6 +16,7 @@ import { readClipboardImage } from "./harness/clipboard-image.js";
 import { readOhConfig, writeOhConfig } from "./harness/config.js";
 import { estimateMessageTokens, getContextWarning } from "./harness/context-warning.js";
 import { CostTracker, estimateCost, getContextWindow } from "./harness/cost.js";
+import { createDesktopStatusWriter } from "./harness/desktop-status.js";
 import { formatLivePerformance, PerformanceTracker } from "./harness/performance.js";
 import {
   formatContextDial,
@@ -139,6 +140,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   const cost = new CostTracker();
   const performanceTracker = new PerformanceTracker();
   const runtimeDialTracker = new RuntimeDialTracker();
+  const desktopStatusWriter = createDesktopStatusWriter(process.env.OH_DESKTOP_STATUS_PATH);
   let cachedConfig = readOhConfig();
 
   // Centralized state store — all REPL state lives here
@@ -164,6 +166,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   const s = () => store.getState();
   let abortController: AbortController | null = null;
   const promptQueue: string[] = [];
+  const recentToolsUsed: string[] = [];
   let drainingPromptQueue = false;
 
   // Legacy aliases — these read/write through the store.
@@ -350,6 +353,27 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     const ctxStr = formatContextDial(runtimeDials.context);
     const resourcesStr = formatResourceDials(runtimeDials.resources);
     const dialsStr = formatRuntimeDials(runtimeDials);
+    desktopStatusWriter.write({
+      version: 1,
+      timestamp: Date.now(),
+      sessionId: session.id,
+      cwd: process.cwd(),
+      model: currentModel || config.model || "",
+      providerName: config.provider.name,
+      permissionMode: config.permissionMode,
+      loading,
+      queueLength: promptQueue.length,
+      messageCount: messages.length,
+      totalCost: totalCostVal,
+      totalInputTokens: inTok,
+      totalOutputTokens: outTok,
+      estimatedTokenCount,
+      contextWindow: runtimeDials.context.maxTokens,
+      recentTools: recentToolsUsed,
+      runtimeDials,
+      performance: performanceSnapshot,
+      ...(session.gitBranch ? { gitBranch: session.gitBranch } : {}),
+    });
 
     // Resolution priority: script (audit U-B1) → template → default.
     //
@@ -450,6 +474,15 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       createInfoMessage(`Attached clipboard image (${image.mediaType}, ${sizeKb}KB) to hidden conversation context.`),
     ];
     syncRenderer();
+  }
+
+  function recordRecentTool(toolName: string): void {
+    const name = toolName.trim();
+    if (!name) return;
+    const existing = recentToolsUsed.indexOf(name);
+    if (existing !== -1) recentToolsUsed.splice(existing, 1);
+    recentToolsUsed.unshift(name);
+    recentToolsUsed.length = Math.min(recentToolsUsed.length, 8);
   }
 
   function enqueuePrompt(input: string): void {
@@ -1193,6 +1226,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
           case "tool_call_start": {
             callIdToToolName.set(event.callId, event.toolName);
+            recordRecentTool(event.toolName);
             const isAgentTool =
               event.toolName === "Agent" || event.toolName === "ParallelAgents" || event.toolName === "Task";
             renderer.setToolCall(event.callId, {
