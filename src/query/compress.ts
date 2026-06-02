@@ -51,6 +51,9 @@ export function estimateMessagesTokens(
   estimateTokens: (text: string) => number = (t) => Math.ceil(t.length / 4),
 ): number {
   return messages.reduce((sum, m) => {
+    if (m.meta?.hidden && m.content.includes("__IMAGE__:")) {
+      return sum + 1500;
+    }
     let tokens = estimateTokens(m.content) + 10;
     if (m.toolCalls) {
       for (const tc of m.toolCalls) {

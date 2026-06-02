@@ -6,6 +6,7 @@ import { IMAGE_PREFIX } from "../tools/ImageReadTool/index.js";
 import type { StreamEvent, ToolCallComplete } from "../types/events.js";
 import type { Message, ToolCall } from "../types/message.js";
 import { createAssistantMessage } from "../types/message.js";
+import { parseImageContext } from "../utils/image-context.js";
 import type { APIToolDef, EffortLevel, ModelInfo, Provider, ProviderConfig } from "./base.js";
 
 /**
@@ -86,6 +87,22 @@ export class AnthropicProvider implements Provider {
         out.push({ role: "user", content });
       } else if (msg.role === "assistant") {
         out.push({ role: "assistant", content: msg.content });
+      } else if (msg.role === "user") {
+        const parsed = parseImageContext(msg.content);
+        if (parsed.images.length > 0) {
+          out.push({
+            role: "user",
+            content: [
+              { type: "text", text: parsed.text || "Attached screenshot/image context." },
+              ...parsed.images.map((image) => ({
+                type: "image",
+                source: { type: "base64", media_type: image.mediaType, data: image.data },
+              })),
+            ],
+          });
+        } else {
+          out.push({ role: "user", content: msg.content });
+        }
       } else {
         out.push({ role: "user", content: msg.content });
       }

@@ -31,7 +31,7 @@ from openharness import query, TextDelta, ToolStart, ToolEnd
 async def main() -> None:
     async for event in query(
         "Summarize the README.md in this directory.",
-        model="ollama/llama3",
+        model="ollama/qwen3:4b",
         permission_mode="trust",
         max_turns=5,
     ):
@@ -54,7 +54,7 @@ import asyncio
 from openharness import OpenHarnessClient, TextDelta
 
 async def main() -> None:
-    async with OpenHarnessClient(model="ollama/llama3", permission_mode="trust") as client:
+    async with OpenHarnessClient(model="ollama/qwen3:4b", permission_mode="trust") as client:
         async for event in await client.send("What is 1+1?"):
             if isinstance(event, TextDelta):
                 print(event.content, end="")
@@ -85,7 +85,7 @@ async def get_weather(city: str) -> str:
 
 async def main() -> None:
     async with OpenHarnessClient(
-        model="ollama/llama3",
+        model="ollama/qwen3:4b",
         tools=[get_weather],
     ) as client:
         async for event in await client.send("What's the weather in Paris?"):
@@ -115,7 +115,7 @@ async def gate(ctx):
     return "allow"
 
 async def main() -> None:
-    async with OpenHarnessClient(model="ollama/llama3", can_use_tool=gate) as client:
+    async with OpenHarnessClient(model="ollama/qwen3:4b", can_use_tool=gate) as client:
         async for event in await client.send("List the current directory"):
             print(event)
 
@@ -137,13 +137,13 @@ import asyncio
 from openharness import OpenHarnessClient
 
 async def main() -> None:
-    async with OpenHarnessClient(model="ollama/llama3") as c1:
+    async with OpenHarnessClient(model="ollama/qwen3:4b") as c1:
         async for _ in await c1.send("Remember that my favorite color is teal."):
             pass
         sid = c1.session_id                        # e.g. "abc-123"
 
     # Later, maybe in a new process — restore context
-    async with OpenHarnessClient(model="ollama/llama3", resume=sid) as c2:
+    async with OpenHarnessClient(model="ollama/qwen3:4b", resume=sid) as c2:
         async for e in await c2.send("What's my favorite color?"):
             print(e)
 
@@ -160,7 +160,7 @@ Requires `@zhijiewang/openharness` v2.17.0+.
 from openharness import OpenHarnessClient, OpenHarnessOptions
 
 opts = OpenHarnessOptions(
-    model="ollama/llama3",
+    model="ollama/qwen3:4b",
     permission_mode="trust",
     max_turns=5,
     setting_sources=["user", "project"],
@@ -179,7 +179,7 @@ Run a single prompt and stream events as they arrive. Options:
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `model` | `str \| None` | from config | Model string (e.g. `"ollama/llama3"`, `"claude-sonnet-4-6"`). |
+| `model` | `str \| None` | from config | Model string (e.g. `"ollama/qwen3:4b"`, `"claude-sonnet-4-6"`). |
 | `permission_mode` | `str` | `"trust"` | One of `"ask"`, `"trust"`, `"deny"`, `"acceptEdits"`, `"plan"`, `"auto"`, `"bypassPermissions"`. |
 | `allowed_tools` | `Sequence[str] \| None` | `None` | Whitelist of tool names. |
 | `disallowed_tools` | `Sequence[str] \| None` | `None` | Blacklist of tool names. |

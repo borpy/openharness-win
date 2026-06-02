@@ -3,7 +3,16 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { makeTmpDir } from "../test-helpers.js";
-import { closeSessionDb, indexSession, openSessionDb, rebuildIndex, searchSessions } from "./session-db.js";
+import { createAssistantMessage, createHiddenUserMessage, createUserMessage } from "../types/message.js";
+import { createSession } from "./session.js";
+import {
+  closeSessionDb,
+  indexSession,
+  openSessionDb,
+  rebuildIndex,
+  searchSessions,
+  sessionToIndexEntry,
+} from "./session-db.js";
 
 test("openSessionDb creates database and FTS5 table", () => {
   const tmp = makeTmpDir();
@@ -128,6 +137,21 @@ test("indexSession upserts on duplicate sessionId", () => {
   assert.equal(count.c, 1);
 
   closeSessionDb(db);
+});
+
+test("sessionToIndexEntry skips hidden image context content", () => {
+  const session = createSession("openai", "gpt-4o");
+  session.messages = [
+    createUserMessage("visible request"),
+    createHiddenUserMessage("hidden payload __IMAGE__:image/png:ZmFrZQ=="),
+    createAssistantMessage("visible answer"),
+  ];
+
+  const entry = sessionToIndexEntry(session);
+  assert.match(entry.content, /visible request/);
+  assert.match(entry.content, /visible answer/);
+  assert.doesNotMatch(entry.content, /__IMAGE__/);
+  assert.doesNotMatch(entry.content, /hidden payload/);
 });
 
 test("rebuildIndex repopulates from session JSON files", () => {

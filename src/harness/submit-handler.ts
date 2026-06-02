@@ -12,6 +12,8 @@ import { createInfoMessage, createUserMessage } from "../types/message.js";
 import type { PermissionMode } from "../types/permissions.js";
 import type { CostTracker } from "./cost.js";
 import { emitHook, emitHookWithOutcome } from "./hooks.js";
+import type { PerformanceSnapshot } from "./performance.js";
+import type { RuntimeDials } from "./runtime-dials.js";
 
 export type SubmitContext = {
   messages: Message[];
@@ -19,6 +21,8 @@ export type SubmitContext = {
   providerName: string;
   permissionMode: PermissionMode;
   cost: CostTracker;
+  performance?: PerformanceSnapshot;
+  runtimeDials?: RuntimeDials;
   sessionId: string;
   companionConfig: CompanionConfig | null;
 };
@@ -91,6 +95,8 @@ export async function handleUserInput(input: string, ctx: SubmitContext): Promis
       totalCost: ctx.cost.totalCost,
       totalInputTokens: ctx.cost.totalInputTokens,
       totalOutputTokens: ctx.cost.totalOutputTokens,
+      performance: ctx.performance,
+      runtimeDials: ctx.runtimeDials,
       sessionId: ctx.sessionId,
     };
     const result = await processSlashCommand(trimmed, cmdCtx);

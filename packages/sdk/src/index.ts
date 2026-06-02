@@ -8,7 +8,7 @@
  * ```ts
  * import { query } from "@zhijiewang/openharness-sdk";
  *
- * for await (const event of query("Summarize README.md", { model: "ollama/llama3" })) {
+ * for await (const event of query("Summarize README.md", { model: "ollama/qwen3:4b" })) {
  *   if (event.type === "text") process.stdout.write(event.content);
  * }
  * ```

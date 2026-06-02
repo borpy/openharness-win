@@ -7,7 +7,7 @@ title: OpenHarness
 
 **Open-source terminal coding agent. Works with any LLM.**
 
-35 tools, 10 agent roles, 677 tests, 36 slash commands.
+46 tools, 10 agent roles, 1737 CLI tests plus 74 SDK tests, 80+ slash commands.
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ oh         # start coding
 ## Features
 
 - **Any LLM**: Ollama, OpenAI, Anthropic, OpenRouter, llama.cpp, LM Studio
-- **35 Built-in Tools**: File operations, bash execution, web search, task management, agent orchestration
+- **46 Built-in Tools**: File operations, bash execution, web search, GitHub workflows, task management, agent orchestration
 - **10 Agent Roles**: Code reviewer, evaluator, planner, architect, migrator, and more
 - **Verification Loops**: Auto-run lint/typecheck after every file edit
 - **Tool Pipelines**: Declarative multi-step workflows without LLM overhead
@@ -34,7 +34,7 @@ oh         # start coding
 
 - [Getting Started](getting-started) — Installation and first session
 - [Configuration](configuration) — All config.yaml options
-- [Tools Reference](tools) — All 35+ tools
+- [Tools Reference](tools) — All 46+ tools
 - [Agent Roles](agent-roles) — 10 specialized roles
 - [Pipelines](pipelines) — Declarative tool workflows
 - [MCP Servers](mcp-servers) — Registry and custom servers

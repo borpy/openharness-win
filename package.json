@@ -28,7 +28,9 @@
   "scripts": {
     "dev": "tsx src/main.tsx",
     "build": "tsc",
+    "build:all": "npm run build && npm run build:sdk",
     "build:sdk": "npm --workspace @zhijiewang/openharness-sdk run build",
+    "package:windows": "npm run build:all && node scripts/package-windows.mjs",
     "prepare": "husky",
     "prepublishOnly": "npm run build",
     "test": "node scripts/test.mjs && npm --workspace @zhijiewang/openharness-sdk run test",

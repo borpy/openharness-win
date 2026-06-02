@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { clearDirtyTreeSnapshots, type GitDirtyCommandResult, setGitDirtyCommandRunner } from "./git/dirty-state.js";
 import { compressMessages, query } from "./query/index.js";
 import {
   createErrorProvider,
@@ -10,6 +11,14 @@ import {
 } from "./test-helpers.js";
 import type { Message } from "./types/message.js";
 import { createAssistantMessage, createMessage, createUserMessage } from "./types/message.js";
+
+function dirtyOk(stdout = ""): GitDirtyCommandResult {
+  return { status: 0, stdout, stderr: "" };
+}
+
+function dirtyFail(stderr = "failed"): GitDirtyCommandResult {
+  return { status: 1, stdout: "", stderr };
+}
 
 // ── Basic flow ──
 
@@ -76,6 +85,44 @@ test("query: terminates on budget exceeded", async () => {
 });
 
 // ── Error recovery ──
+
+test("query: injects dirty tree context and tracks carried-forward files between prompts", async () => {
+  let status = " M src/app.ts\n";
+  setGitDirtyCommandRunner((args) => {
+    const key = args.join(" ");
+    if (key === "rev-parse --is-inside-work-tree") return dirtyOk("true\n");
+    if (key === "status --porcelain=v1") return dirtyOk(status);
+    if (key === "branch --show-current") return dirtyOk("feature/dirty\n");
+    return dirtyFail(`unexpected: ${key}`);
+  });
+
+  try {
+    const provider = createMockProvider([textResponseEvents("first"), textResponseEvents("second")]);
+    const config = {
+      provider,
+      tools: [],
+      systemPrompt: "test",
+      permissionMode: "trust" as const,
+      workingDir: "C:\\repo",
+      sessionId: "dirty-query-test",
+    };
+
+    for await (const _ of query("first", config)) {
+      // drain
+    }
+    status = " M src/app.ts\n?? notes.md\n";
+    for await (const _ of query("second", config)) {
+      // drain
+    }
+
+    assert.match(provider.calls[0]!.systemPrompt, /pre-existing workspace changes/);
+    assert.match(provider.calls[1]!.systemPrompt, /Still dirty from the previous prompt\/session turn: src\/app.ts/);
+    assert.match(provider.calls[1]!.systemPrompt, /Newly dirty since the previous prompt\/session turn: notes.md/);
+  } finally {
+    setGitDirtyCommandRunner();
+    clearDirtyTreeSnapshots();
+  }
+});
 
 test("query: rate limit triggers retry", async () => {
   const error = new Error("HTTP 429 rate limit exceeded");

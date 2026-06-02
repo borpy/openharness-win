@@ -12,7 +12,7 @@ import type { ToolDefinition } from "./tools.js";
 export type PermissionMode = "ask" | "trust" | "deny" | "acceptEdits" | "plan" | "auto" | "bypassPermissions";
 
 export interface OpenHarnessOptions {
-  /** Model string (e.g. `"ollama/llama3"`, `"claude-sonnet-4-6"`). */
+  /** Model string (e.g. `"ollama/qwen3:4b"`, `"claude-sonnet-4-6"`). */
   model?: string;
   /** Permission gate mode for the spawned CLI. Defaults to `"trust"` so headless callers don't hang on prompts. */
   permissionMode?: PermissionMode;
@@ -75,7 +75,7 @@ export interface OpenHarnessOptions {
  * @example
  * ```ts
  * const opts = new OpenHarnessOptionsBundle({
- *   model: "ollama/llama3",
+ *   model: "ollama/qwen3:4b",
  *   maxTurns: 5,
  *   settingSources: ["user", "project"],
  * });

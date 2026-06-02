@@ -22,6 +22,8 @@ import { ExitWorktreeTool } from "./tools/ExitWorktreeTool/index.js";
 import { FileEditTool } from "./tools/FileEditTool/index.js";
 import { FileReadTool } from "./tools/FileReadTool/index.js";
 import { FileWriteTool } from "./tools/FileWriteTool/index.js";
+import { GitHubReadTool } from "./tools/GitHubReadTool/index.js";
+import { GitHubWriteTool } from "./tools/GitHubWriteTool/index.js";
 import { GlobTool } from "./tools/GlobTool/index.js";
 import { GrepTool } from "./tools/GrepTool/index.js";
 import { ImageReadTool } from "./tools/ImageReadTool/index.js";
@@ -56,8 +58,8 @@ import { WebSearchTool } from "./tools/WebSearchTool/index.js";
 /**
  * Returns all registered tools.
  *
- * Core tools (~17) are fully loaded with complete prompts.
- * Extended tools (~18) are deferred — they show a one-liner in the system
+ * Core tools (19) are fully loaded with complete prompts.
+ * Extended tools (28) are deferred — they show a one-liner in the system
  * prompt and resolve full schema on first use or via ToolSearch.
  */
 export function getAllTools(): Tools {
@@ -93,6 +95,8 @@ export function getAllTools(): Tools {
     WebFetchTool,
     WebSearchTool,
     ExaSearchTool,
+    GitHubReadTool,
+    GitHubWriteTool,
     TaskGetTool,
     TaskStopTool,
     TaskOutputTool,

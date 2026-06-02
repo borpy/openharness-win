@@ -37,6 +37,14 @@ test("/clear sets clearMessages=true", async () => {
   assert.equal(result.clearMessages, true);
 });
 
+test("/queue placeholder explains interactive queue controls", async () => {
+  const result = await processSlashCommand("/queue", makeCtx());
+  assert.ok(result);
+  assert.equal(result.handled, true);
+  assert.match(result.output, /interactive REPL/);
+  assert.match(result.output, /\/queue clear/);
+});
+
 test("/cost returns output with cost and token info", async () => {
   const result = await processSlashCommand("/cost", makeCtx());
   assert.ok(result);
@@ -50,6 +58,7 @@ test("/status returns output with model and provider info", async () => {
   assert.ok(result);
   assert.equal(result.handled, true);
   assert.ok(result.output.includes("gpt-4o"));
+  assert.ok(result.output.includes("openai"));
   assert.ok(result.output.includes("default"));
 });
 

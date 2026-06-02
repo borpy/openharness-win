@@ -9,7 +9,7 @@
  *     refreshMs: 2000
  *
  * On each REPL refresh, OH:
- *   1. Builds a JSON envelope of session state (model, tokens, cost, etc.)
+ *   1. Builds a JSON envelope of session state (model, tokens, cost, perf/dials, etc.)
  *   2. If the cache window hasn't expired AND the envelope hasn't changed,
  *      returns the cached stdout — no spawn cost on every keypress.
  *   3. Otherwise spawns the command through the shell, pipes the envelope
@@ -26,12 +26,16 @@
  */
 
 import { spawnSync } from "node:child_process";
+import type { PerformanceSnapshot } from "./performance.js";
+import type { RuntimeDials } from "./runtime-dials.js";
 
 export interface StatusLineEnvelope {
   model: string;
   tokens: { input: number; output: number };
   cost: number;
   contextPercent: number;
+  performance?: PerformanceSnapshot;
+  dials?: RuntimeDials;
   sessionId: string;
   cwd: string;
   gitBranch?: string;
@@ -67,6 +71,8 @@ function envelopeKey(env: StatusLineEnvelope): string {
     tokens: env.tokens,
     cost: env.cost,
     contextPercent: env.contextPercent,
+    performance: env.performance,
+    dials: env.dials,
     cwd: env.cwd,
     gitBranch: env.gitBranch,
   });

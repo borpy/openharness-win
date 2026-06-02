@@ -1,8 +1,33 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
+import { createHiddenUserMessage } from "../types/message.js";
+import { createImageContextContent } from "../utils/image-context.js";
 import { OllamaProvider } from "./ollama.js";
+import {
+  DEFAULT_LOCAL_OLLAMA_MODEL,
+  orderPreferredLocalOllamaModels,
+  selectPreferredLocalOllamaModel,
+} from "./ollama-defaults.js";
 
 const originalFetch = globalThis.fetch;
+
+test("selectPreferredLocalOllamaModel prefers installed Qwen3 defaults", () => {
+  assert.equal(
+    selectPreferredLocalOllamaModel(["llama3:latest", "qwen3:0.6b", "qwen3:4b"]),
+    DEFAULT_LOCAL_OLLAMA_MODEL,
+  );
+  assert.equal(selectPreferredLocalOllamaModel(["llama3:latest", "qwen3:0.6b"]), "qwen3:0.6b");
+  assert.equal(selectPreferredLocalOllamaModel(["mistral:latest", "llama3:latest"]), "llama3:latest");
+  assert.equal(selectPreferredLocalOllamaModel([]), DEFAULT_LOCAL_OLLAMA_MODEL);
+});
+
+test("orderPreferredLocalOllamaModels moves the preferred model first", () => {
+  assert.deepEqual(orderPreferredLocalOllamaModels(["llama3:latest", "qwen3:0.6b", "qwen3:4b"]), [
+    "qwen3:4b",
+    "llama3:latest",
+    "qwen3:0.6b",
+  ]);
+});
 
 test("fetchModels returns models from /api/tags", async () => {
   globalThis.fetch = mock.fn(
@@ -160,4 +185,20 @@ test("complete() also includes options.num_ctx", async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test("stream() sends hidden image context as Ollama images array", async () => {
+  const provider = new OllamaProvider({ name: "ollama", defaultModel: "llava:latest" });
+  const imageMessage = createHiddenUserMessage(
+    createImageContextContent({ mediaType: "image/png", base64: "ZmFrZQ==", source: "test" }),
+  );
+  const body = await captureRequestBody(provider, async (p) => {
+    for await (const _ of p.stream([imageMessage], "system", undefined, "llava:latest")) {
+      void _;
+    }
+  });
+
+  const messages = body.messages as Array<{ role: string; content: string; images?: string[] }>;
+  assert.equal(messages[1]!.role, "user");
+  assert.deepEqual(messages[1]!.images, ["ZmFrZQ=="]);
 });

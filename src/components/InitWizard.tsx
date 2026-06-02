@@ -16,6 +16,7 @@ import TextInput from "ink-text-input";
 import { useCallback, useState } from "react";
 import { writeOhConfig } from "../harness/config.js";
 import { MCP_REGISTRY } from "../mcp/registry.js";
+import { DEFAULT_LOCAL_OLLAMA_MODEL, orderPreferredLocalOllamaModels } from "../providers/ollama-defaults.js";
 import CybergotchiSetup from "./CybergotchiSetup.js";
 
 // ── Types ──
@@ -32,7 +33,7 @@ const PROVIDERS: Provider[] = [
   {
     key: "ollama",
     label: "Ollama (local, free)",
-    defaultModel: "llama3",
+    defaultModel: DEFAULT_LOCAL_OLLAMA_MODEL,
     needsApiKey: false,
     defaultBaseUrl: "http://localhost:11434",
   },
@@ -132,13 +133,17 @@ export default function InitWizard({ onDone }: Props) {
           ? await (p as any).fetchModels()
           : p.listModels();
       const modelNames = fetched.map((m: any) => m.id as string);
-      setAvailableModels(modelNames.length > 0 ? modelNames : [prov.defaultModel]);
+      const choices =
+        modelNames.length > 0 && prov.key === "ollama" ? orderPreferredLocalOllamaModels(modelNames) : modelNames;
+      setAvailableModels(choices.length > 0 ? choices : [prov.defaultModel]);
+      setModelIdx(0);
       setTestStatus("ok");
       setTimeout(() => setStep("model"), 600);
     } catch (err) {
       setTestStatus("fail");
       setTestError(err instanceof Error ? err.message : String(err));
       setAvailableModels([prov.defaultModel]);
+      setModelIdx(0);
       setTimeout(() => setStep("model"), 800);
     }
   }, []);

@@ -31,7 +31,7 @@ The **query engine** (`src/query/index.ts`) runs a ReAct loop:
 |--------|---------|
 | `src/query/` | Agent loop, context compression, tool execution |
 | `src/providers/` | LLM adapters (Ollama, OpenAI, Anthropic, etc.) |
-| `src/tools/` | 35+ tool implementations |
+| `src/tools/` | 46+ tool implementations |
 | `src/harness/` | Config, hooks, permissions, memory, session, verification |
 | `src/services/` | Agent dispatcher, cron, pipelines, A2A, streaming executor |
 | `src/renderer/` | Terminal UI (60fps batched rendering) |
@@ -56,7 +56,7 @@ When context exceeds 80% of the window:
 
 ## Progressive Tool Loading
 
-17 core tools load with full prompts. 18 extended tools are **deferred** — they show a one-liner in the system prompt and resolve full schema on first use via ToolSearch. This saves ~46% of tool prompt tokens.
+19 core tools load with full prompts. 28 extended tools are **deferred** — they show a one-liner in the system prompt and resolve full schema on first use via ToolSearch. This keeps the system prompt compact while preserving access to GitHub, MCP, worktree, automation, and orchestration tools.
 
 ## Permission System
 

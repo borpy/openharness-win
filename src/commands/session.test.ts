@@ -1,9 +1,31 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
+import { chdir, cwd } from "node:process";
 import { describe, it } from "node:test";
 import { createSession, listSessions, loadSession, saveSession } from "../harness/session.js";
 import { makeTmpDir } from "../test-helpers.js";
-import { createAssistantMessage, createToolResultMessage, createUserMessage } from "../types/message.js";
+import {
+  createAssistantMessage,
+  createHiddenUserMessage,
+  createToolResultMessage,
+  createUserMessage,
+} from "../types/message.js";
+import { processSlashCommand } from "./index.js";
+import type { CommandContext } from "./types.js";
+
+function makeCtx(overrides: Partial<CommandContext> = {}): CommandContext {
+  return {
+    messages: [],
+    model: "gpt-4o",
+    providerName: "openai",
+    permissionMode: "ask",
+    totalCost: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    sessionId: "session-command-test",
+    ...overrides,
+  };
+}
 
 describe("/fork polish — parentSessionId + provider/model inheritance", () => {
   it("createSession stores parentSessionId when passed in extras", () => {
@@ -64,5 +86,31 @@ describe("/export polish — markdown with tool calls + JSON mode", () => {
     const raw = readFileSync(path, "utf-8");
     assert.match(raw, /"role":\s*"user"/);
     assert.match(raw, /"role":\s*"assistant"/);
+  });
+
+  it("markdown export skips hidden image context", async () => {
+    const oldCwd = cwd();
+    const dir = makeTmpDir();
+    try {
+      chdir(dir);
+      const result = await processSlashCommand(
+        "/export",
+        makeCtx({
+          messages: [
+            createUserMessage("visible request"),
+            createHiddenUserMessage("Pasted image\n__IMAGE__:image/png:ZmFrZQ=="),
+            createAssistantMessage("visible answer"),
+          ],
+        }),
+      );
+      assert.ok(result);
+      assert.equal(result.handled, true);
+      const body = readFileSync(".oh/export-session-command-test.md", "utf-8");
+      assert.match(body, /visible request/);
+      assert.match(body, /visible answer/);
+      assert.doesNotMatch(body, /__IMAGE__/);
+    } finally {
+      chdir(oldCwd);
+    }
   });
 });

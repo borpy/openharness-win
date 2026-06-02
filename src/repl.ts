@@ -12,15 +12,24 @@ import { cybergotchiEvents } from "./cybergotchi/events.js";
 import { getSpecies } from "./cybergotchi/species.js";
 import { EYE_STYLES, RARITY_COLORS, RARITY_STARS } from "./cybergotchi/types.js";
 import { autoCommitAIEdits, isGitRepo } from "./git/index.js";
+import { readClipboardImage } from "./harness/clipboard-image.js";
 import { readOhConfig, writeOhConfig } from "./harness/config.js";
 import { estimateMessageTokens, getContextWarning } from "./harness/context-warning.js";
 import { CostTracker, estimateCost, getContextWindow } from "./harness/cost.js";
+import { formatLivePerformance, PerformanceTracker } from "./harness/performance.js";
+import {
+  formatContextDial,
+  formatResourceDials,
+  formatRuntimeDials,
+  RuntimeDialTracker,
+} from "./harness/runtime-dials.js";
 import { createSession, loadSession, type Session, saveSession } from "./harness/session.js";
 import { runStatusLineScript } from "./harness/status-line-script.js";
 import { createStore } from "./harness/store.js";
 import { handleUserInput } from "./harness/submit-handler.js";
 import { isTrusted, trustSystemActive } from "./harness/trust.js";
 import type { Provider } from "./providers/base.js";
+import { fetchOllamaStatus, normalizeOllamaBaseUrl, testOllamaGenerate } from "./providers/ollama-control.js";
 import { query } from "./query/index.js";
 import { resetDiffStyleCache } from "./renderer/diff.js";
 import { type KeyEvent, TerminalRenderer } from "./renderer/index.js";
@@ -29,16 +38,16 @@ import { resetStyleCache } from "./renderer/layout.js";
 import { resetMdStyleCache } from "./renderer/markdown.js";
 import type { Tools } from "./Tool.js";
 import type { Message } from "./types/message.js";
-import { createAssistantMessage, createInfoMessage, createMessage } from "./types/message.js";
+import { createAssistantMessage, createHiddenUserMessage, createInfoMessage, createMessage } from "./types/message.js";
 import type { PermissionMode } from "./types/permissions.js";
 import { formatTokenCount } from "./utils/format.js";
 import { fuzzyFilter } from "./utils/fuzzy.js";
+import { createImageContextContent } from "./utils/image-context.js";
 import { setActiveTheme } from "./utils/theme-data.js";
 import { formatToolArgs, summarizeToolOutput } from "./utils/tool-summary.js";
 
 /** Per-call cap on rendered tool output in renderer state. Sized to fit typical JSON/markdown files (16 KiB) so JSON.parse / markdown detection works on real content; larger outputs render truncated. */
 const TOOL_OUTPUT_RENDER_CAP = 16384;
-
 export type REPLConfig = {
   provider: Provider;
   tools: Tools;
@@ -128,6 +137,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   publishCard(agentCard);
 
   const cost = new CostTracker();
+  const performanceTracker = new PerformanceTracker();
+  const runtimeDialTracker = new RuntimeDialTracker();
   let cachedConfig = readOhConfig();
 
   // Centralized state store — all REPL state lives here
@@ -152,6 +163,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   // Convenience accessors (avoids store.getState().x everywhere)
   const s = () => store.getState();
   let abortController: AbortController | null = null;
+  const promptQueue: string[] = [];
+  let drainingPromptQueue = false;
 
   // Legacy aliases — these read/write through the store.
   // Gradually migrate callers to use store.setState() directly.
@@ -316,7 +329,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     syncStore();
     renderer.setMessages(messages);
     renderer.setLoading(loading);
-    const hints = `exit to quit${loading ? " | Ctrl+C stop | Ctrl+O thinking" : " | Tab expand tools | Ctrl+O transcript"}${companionConfig?.soul?.name ? ` | @${companionConfig.soul.name}` : ""}`;
+    const queueHint = promptQueue.length > 0 ? ` | queue ${promptQueue.length}` : "";
+    const hints = `exit to quit${loading ? " | Ctrl+C stop | Ctrl+O thinking" : " | Tab expand tools | Ctrl+O transcript"}${queueHint}${companionConfig?.soul?.name ? ` | @${companionConfig.soul.name}` : ""}`;
     renderer.setStatusHints(hints);
     // Status line: model | tokens | cost | ctx
     const inTok = cost.totalInputTokens;
@@ -324,16 +338,18 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     const totalCostVal = cost.totalCost;
     const tokensStr = inTok > 0 || outTok > 0 ? `${formatTokenCount(inTok)}↑ ${formatTokenCount(outTok)}↓` : "";
     const costStr = totalCostVal > 0 ? `$${totalCostVal.toFixed(4)}` : "";
-    let ctxStr = "";
+    const performanceSnapshot = performanceTracker.snapshot();
+    const perfStr = formatLivePerformance(performanceSnapshot);
     const ctxWindow = getContextWindow(currentModel);
-    if (ctxWindow > 0 && estimatedTokenCount > 0) {
-      const usage = Math.min(1, estimatedTokenCount / ctxWindow);
-      const barWidth = 10;
-      const filled = Math.max(1, Math.round(usage * barWidth));
-      const bar = "█".repeat(filled) + "░".repeat(barWidth - filled);
-      const pct = Math.max(1, Math.ceil(usage * 100));
-      ctxStr = `ctx [${bar}] ${pct}%`;
-    }
+    const providerContextWindow = config.provider.getModelInfo?.(currentModel || config.model || "")?.contextWindow;
+    const runtimeDials = runtimeDialTracker.snapshot({
+      usedTokens: estimatedTokenCount,
+      model: currentModel,
+      maxTokens: providerContextWindow ?? ctxWindow,
+    });
+    const ctxStr = formatContextDial(runtimeDials.context);
+    const resourcesStr = formatResourceDials(runtimeDials.resources);
+    const dialsStr = formatRuntimeDials(runtimeDials);
 
     // Resolution priority: script (audit U-B1) → template → default.
     //
@@ -350,13 +366,15 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       if (trustSystemActive() && !isTrusted(cwd)) {
         scriptLine = null; // untrusted — silently skip; user can /trust
       } else {
-        const ctxPct = ctxWindow > 0 && estimatedTokenCount > 0 ? estimatedTokenCount / ctxWindow : 0;
+        const ctxPct = runtimeDials.context.percent;
         scriptLine = runStatusLineScript(
           {
             model: currentModel || "",
             tokens: { input: inTok, output: outTok },
             cost: totalCostVal,
             contextPercent: ctxPct,
+            performance: performanceSnapshot,
+            dials: runtimeDials,
             sessionId: session.id,
             cwd,
             gitBranch: session.gitBranch,
@@ -373,6 +391,9 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         .replace("{tokens}", tokensStr)
         .replace("{cost}", costStr)
         .replace("{ctx}", ctxStr)
+        .replace("{perf}", perfStr)
+        .replace("{resources}", resourcesStr)
+        .replace("{dials}", dialsStr)
         .replace(/\s*│\s*│/g, "│") // collapse empty sections
         .replace(/^│\s*/, "")
         .replace(/\s*│$/, ""); // trim leading/trailing separators
@@ -383,6 +404,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       if (tokensStr) parts.push(tokensStr);
       if (costStr) parts.push(costStr);
       if (ctxStr) parts.push(ctxStr);
+      if (resourcesStr) parts.push(resourcesStr);
+      if (perfStr) parts.push(perfStr);
       renderer.setStatusLine(parts.join(" │ "));
     }
     // Context warning
@@ -401,6 +424,118 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     renderer.setContextWarning(getContextWarning(estimatedTokenCount, currentModel));
   }
 
+  async function attachClipboardImage(): Promise<void> {
+    const image = await readClipboardImage();
+    if (!image) {
+      messages = [
+        ...messages,
+        createInfoMessage(
+          "No screenshot/image found on the clipboard. Copy a screenshot first, or run /paste-image after copying one.",
+        ),
+      ];
+      syncRenderer();
+      return;
+    }
+    const hidden = createHiddenUserMessage(
+      createImageContextContent({
+        mediaType: image.mediaType,
+        base64: image.buffer.toString("base64"),
+        source: image.source,
+      }),
+    );
+    const sizeKb = Math.max(1, Math.round(image.buffer.length / 1024));
+    messages = [
+      ...messages,
+      hidden,
+      createInfoMessage(`Attached clipboard image (${image.mediaType}, ${sizeKb}KB) to hidden conversation context.`),
+    ];
+    syncRenderer();
+  }
+
+  function enqueuePrompt(input: string): void {
+    promptQueue.push(input);
+    const preview = input.length > 80 ? `${input.slice(0, 77)}...` : input;
+    messages = [...messages, createInfoMessage(`Queued prompt #${promptQueue.length}: ${preview}`)];
+    syncRenderer();
+  }
+
+  async function ensureModelReadyForPrompt(queued: boolean): Promise<boolean> {
+    if (config.provider.name === "ollama") {
+      const baseUrl = normalizeOllamaBaseUrl(cachedConfig?.provider === "ollama" ? cachedConfig.baseUrl : undefined);
+      const status = await fetchOllamaStatus({ baseUrl, currentModel });
+      if (!status.alive || !status.currentModelAvailable) {
+        const lines = [
+          queued ? "Prompt queue paused: Ollama is not ready." : "Ollama is not ready for this prompt.",
+          ...status.blockers.map((blocker) => `- ${blocker}`),
+          ...status.recommendations.map((recommendation) => `- ${recommendation}`),
+        ];
+        messages = [...messages, createInfoMessage(lines.join("\n"))];
+        syncRenderer();
+        return false;
+      }
+      if (queued) {
+        const test = await testOllamaGenerate({ baseUrl, model: currentModel, timeoutMs: 10_000 });
+        if (!test.ok) {
+          messages = [
+            ...messages,
+            createInfoMessage(
+              `Prompt queue paused: Ollama model '${currentModel}' did not pass the responsiveness check.\n${test.message}`,
+            ),
+          ];
+          syncRenderer();
+          return false;
+        }
+      }
+      return true;
+    }
+
+    if (queued) {
+      try {
+        const ok = await config.provider.healthCheck();
+        if (!ok) {
+          messages = [
+            ...messages,
+            createInfoMessage(`Prompt queue paused: provider '${config.provider.name}' failed its health check.`),
+          ];
+          syncRenderer();
+          return false;
+        }
+      } catch (err) {
+        messages = [
+          ...messages,
+          createInfoMessage(
+            `Prompt queue paused: provider '${config.provider.name}' health check failed: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          ),
+        ];
+        syncRenderer();
+        return false;
+      }
+    }
+    return true;
+  }
+
+  async function drainPromptQueue(): Promise<void> {
+    if (drainingPromptQueue || loading) return;
+    drainingPromptQueue = true;
+    try {
+      while (!loading && promptQueue.length > 0) {
+        const next = promptQueue.shift()!;
+        const ready = await ensureModelReadyForPrompt(true);
+        if (!ready) {
+          promptQueue.unshift(next);
+          break;
+        }
+        messages = [...messages, createInfoMessage(`Running queued prompt (${promptQueue.length} remaining).`)];
+        syncRenderer();
+        await handleSubmit(next, true, true);
+      }
+    } finally {
+      drainingPromptQueue = false;
+    }
+  }
+
   // Input handling
   renderer.onKeypress((key: KeyEvent) => {
     // Ctrl+C: abort or exit
@@ -411,6 +546,11 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         cleanup();
         process.exit(0);
       }
+      return;
+    }
+
+    if (key.ctrl && key.char === "v") {
+      void attachClipboardImage();
       return;
     }
 
@@ -538,18 +678,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         }
         // Submit with Enter even in normal mode
         if (key.name === "return") {
-          if (inputText.trim() && !loading) {
-            handleSubmit(inputText.trim());
-            inputHistory.unshift(inputText);
-            historyIndex = -1;
-            inputText = "";
-            inputCursor = 0;
-            acSuggestions = [];
-            acDescriptions = [];
-            renderer.setInputText(inputText);
-            renderer.setInputCursor(inputCursor);
-            renderer.setAutocomplete([], -1);
-          }
+          submitInputText();
           return;
         }
         return; // swallow other keys in normal mode
@@ -662,18 +791,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
     // Enter: submit
     if (key.name === "return") {
-      if (inputText.trim() && !loading) {
-        handleSubmit(inputText.trim());
-        inputHistory.unshift(inputText);
-        historyIndex = -1;
-        inputText = "";
-        inputCursor = 0;
-        acSuggestions = [];
-        acIndex = -1;
-        renderer.setAutocomplete([], -1);
-        renderer.setInputText(inputText);
-        renderer.setInputCursor(inputCursor);
-      }
+      submitInputText();
       return;
     }
 
@@ -770,9 +888,58 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     renderer.setInputCursor(inputCursor);
   }
 
-  async function handleSubmit(input: string) {
+  function submitInputText(): void {
+    const submitted = inputText.trim();
+    if (!submitted) return;
+    inputHistory.unshift(inputText);
+    historyIndex = -1;
+    inputText = "";
+    inputCursor = 0;
+    acSuggestions = [];
+    acDescriptions = [];
+    acCategories = [];
+    acIndex = -1;
+    renderer.setAutocomplete([], -1);
+    renderer.setInputText(inputText);
+    renderer.setInputCursor(inputCursor);
+    const lower = submitted.toLowerCase();
+    const immediateWhileLoading = lower.startsWith("/queue") || lower === "/paste-image" || lower === "/screenshot";
+    if (loading && !immediateWhileLoading) {
+      enqueuePrompt(submitted);
+    } else {
+      void handleSubmit(submitted);
+    }
+  }
+
+  async function handleSubmit(input: string, queued = false, healthPrechecked = false) {
     // Clear any previous errors on new input
     renderer.setError(null);
+
+    if (input === "/queue" || input.startsWith("/queue ")) {
+      const [, actionRaw] = input.split(/\s+/, 2);
+      const action = (actionRaw ?? "status").toLowerCase();
+      if (action === "clear") {
+        const count = promptQueue.length;
+        promptQueue.length = 0;
+        messages = [...messages, createInfoMessage(`Cleared ${count} queued prompt(s).`)];
+      } else if (action === "run" || action === "resume") {
+        messages = [...messages, createInfoMessage(`Queue resume requested (${promptQueue.length} pending).`)];
+        syncRenderer();
+        void drainPromptQueue();
+        return;
+      } else {
+        const lines = [`Prompt queue: ${promptQueue.length} pending`];
+        promptQueue.slice(0, 10).forEach((prompt, index) => {
+          const preview = prompt.length > 100 ? `${prompt.slice(0, 97)}...` : prompt;
+          lines.push(`  ${index + 1}. ${preview}`);
+        });
+        if (promptQueue.length > 10) lines.push(`  ... ${promptQueue.length - 10} more`);
+        lines.push("", "Commands: /queue run, /queue clear");
+        messages = [...messages, createInfoMessage(lines.join("\n"))];
+      }
+      syncRenderer();
+      return;
+    }
 
     // Exit
     if (input === "exit" || input === "quit" || input === "/exit" || input === "/quit" || input === "/q") {
@@ -860,6 +1027,14 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       providerName: config.provider.name,
       permissionMode: config.permissionMode,
       cost,
+      performance: performanceTracker.snapshot(),
+      runtimeDials: runtimeDialTracker.snapshot({
+        usedTokens: estimatedTokenCount,
+        model: currentModel,
+        maxTokens:
+          config.provider.getModelInfo?.(currentModel || config.model || "")?.contextWindow ??
+          getContextWindow(currentModel),
+      }),
       sessionId: session.id,
       companionConfig,
     });
@@ -924,10 +1099,13 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     if (result.prompt) renderer.clearLiveArea();
     syncRenderer();
     if (result.handled) return;
-    if (result.prompt) await runQuery(result.prompt);
+    if (result.prompt) await runQuery(result.prompt, queued, healthPrechecked);
   }
 
-  async function runQuery(prompt: string) {
+  async function runQuery(prompt: string, queued = false, healthPrechecked = false) {
+    if (!healthPrechecked && !(await ensureModelReadyForPrompt(queued))) {
+      return;
+    }
     // Messages already set by handleSubmit's syncRenderer().
     // Live area already cleared and flushed by the render microtask
     // that fires between syncRenderer() and this await point.
@@ -953,6 +1131,14 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       ? config.systemPrompt +
         "\n\nIMPORTANT: Fast mode is active. Be extremely concise. Skip explanations. Go straight to the answer or action."
       : config.systemPrompt;
+    const estimatedInputTokens =
+      estimateMessageTokens(messages) + Math.ceil(prompt.length / 4) + Math.ceil(effectiveSystemPrompt.length / 4);
+    performanceTracker.startTurn({
+      estimatedInputTokens,
+      model: currentModel || config.model,
+    });
+    let lastPerformanceRenderAt = 0;
+    syncRenderer();
 
     const queryConfig = {
       provider: config.provider,
@@ -973,6 +1159,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         switch (event.type) {
           case "text_delta": {
             // Content auto-scrolls via terminal native scrollback
+            const now = Date.now();
+            performanceTracker.recordTextDelta(event.content, now);
             accumulated += event.content;
             // Move completed lines to messages, keep partial in streaming
             const lines = accumulated.split("\n");
@@ -991,6 +1179,10 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             }
             renderer.setMessages(messages);
             renderer.setStreamingText(accumulated);
+            if (now - lastPerformanceRenderAt >= 500) {
+              lastPerformanceRenderAt = now;
+              syncRenderer();
+            }
             break;
           }
 
@@ -1095,6 +1287,12 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
           case "cost_update":
             currentModel = event.model;
+            performanceTracker.recordCostUpdate({
+              inputTokens: event.inputTokens,
+              outputTokens: event.outputTokens,
+              cost: event.cost || estimateCost(event.model, event.inputTokens, event.outputTokens),
+              model: event.model,
+            });
             cost.record(
               "provider",
               event.model,
@@ -1161,6 +1359,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         renderer.setError(err instanceof Error ? err.message : String(err));
       }
     } finally {
+      performanceTracker.finishTurn();
       // Preserve partial streaming text on abort
       if (accumulated) {
         const last = messages[messages.length - 1];
@@ -1177,6 +1376,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       renderer.setStreamingText("");
       // Content auto-scrolls via terminal native scrollback
       syncRenderer();
+      void drainPromptQueue();
     }
   }
 

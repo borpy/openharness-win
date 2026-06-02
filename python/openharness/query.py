@@ -79,11 +79,11 @@ async def query(
 
     Example::
 
-        async for event in query("What is 2+2?", model="ollama/llama3", max_turns=1):
+        async for event in query("What is 2+2?", model="ollama/qwen3:4b", max_turns=1):
             print(event)
 
     :param prompt: The user prompt to send.
-    :param model: Model string (e.g. ``"ollama/llama3"``, ``"claude-sonnet-4-6"``).
+    :param model: Model string (e.g. ``"ollama/qwen3:4b"``, ``"claude-sonnet-4-6"``).
         When omitted, ``oh`` uses the model from ``.oh/config.yaml`` or env detection.
     :param permission_mode: One of the CLI-supported modes; ``"trust"`` by default so
         headless scripts don't hang on permission prompts.

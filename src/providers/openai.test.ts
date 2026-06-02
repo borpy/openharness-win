@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test, { mock } from "node:test";
+import { createHiddenUserMessage } from "../types/message.js";
+import { createImageContextContent } from "../utils/image-context.js";
 import { OpenAIProvider } from "./openai.js";
 
 const originalFetch = globalThis.fetch;
@@ -25,4 +27,29 @@ test("OpenAI listModels returns hardcoded models", () => {
   const models = provider.listModels();
   assert.ok(models.length > 0);
   assert.ok(models.some((m) => m.id.includes("gpt")));
+});
+
+test("OpenAI stream sends hidden image context as image_url content", async () => {
+  let captured: any;
+  globalThis.fetch = mock.fn(async (_url: any, init?: RequestInit) => {
+    captured = JSON.parse(String(init?.body ?? "{}"));
+    return new Response("stop", { status: 500 });
+  }) as any;
+
+  try {
+    const provider = new OpenAIProvider({ name: "openai", apiKey: "test-key" });
+    const imageMessage = createHiddenUserMessage(
+      createImageContextContent({ mediaType: "image/png", base64: "ZmFrZQ==", source: "test" }),
+    );
+    for await (const _ of provider.stream([imageMessage], "system", undefined, "gpt-4o")) {
+      void _;
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const content = captured.messages[1].content;
+  assert.equal(content[0].type, "text");
+  assert.equal(content[1].type, "image_url");
+  assert.equal(content[1].image_url.url, "data:image/png;base64,ZmFrZQ==");
 });

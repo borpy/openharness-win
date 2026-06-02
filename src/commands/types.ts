@@ -2,6 +2,8 @@
  * Shared types for the slash command system.
  */
 
+import type { PerformanceSnapshot } from "../harness/performance.js";
+import type { RuntimeDials } from "../harness/runtime-dials.js";
 import type { Message } from "../types/message.js";
 
 export type CommandResult = {
@@ -35,5 +37,7 @@ export type CommandContext = {
   totalCost: number;
   totalInputTokens: number;
   totalOutputTokens: number;
+  performance?: PerformanceSnapshot;
+  runtimeDials?: RuntimeDials;
   sessionId: string;
 };

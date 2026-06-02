@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { describe, it } from "node:test";
+import { describe, it, mock } from "node:test";
 import { invalidateConfigCache } from "../harness/config.js";
 import { makeTmpDir } from "../test-helpers.js";
 import { createProvider, parseFallbackModel } from "./index.js";
@@ -25,6 +25,37 @@ async function withConfig(yaml: string, fn: () => Promise<void>): Promise<void> 
 }
 
 describe("createProvider factory — fallback wiring", () => {
+  it("no explicit model probes local Ollama and prefers an installed Qwen3 model", async () => {
+    const originalFetch = globalThis.fetch;
+    const dir = makeTmpDir();
+    const originalCwd = process.cwd();
+    globalThis.fetch = mock.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            models: [
+              { name: "llama3:latest", details: { families: ["llama"] } },
+              { name: "qwen3:0.6b", details: { families: ["qwen3"] } },
+              { name: "qwen3:4b", details: { families: ["qwen3"] } },
+            ],
+          }),
+          { status: 200 },
+        ),
+    ) as any;
+
+    process.chdir(dir);
+    invalidateConfigCache();
+    try {
+      const { provider, model } = await createProvider();
+      assert.equal(provider.name, "ollama");
+      assert.equal(model, "qwen3:4b");
+    } finally {
+      process.chdir(originalCwd);
+      invalidateConfigCache();
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("no fallbackProviders config → returns raw primary (no activeFallback getter)", async () => {
     await withConfig(["provider: openai", "model: gpt-4o-mini", "permissionMode: ask", ""].join("\n"), async () => {
       const { provider } = await createProvider("openai/gpt-4o-mini");

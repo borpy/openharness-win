@@ -152,6 +152,7 @@ export function sessionToIndexEntry(session: Session): SessionIndexEntry {
   const toolsSet = new Set<string>();
 
   for (const msg of session.messages) {
+    if (msg.meta?.hidden) continue;
     if (msg.role === "user" || msg.role === "assistant") {
       if (msg.content) {
         contentParts.push(msg.content);

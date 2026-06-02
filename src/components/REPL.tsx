@@ -557,7 +557,7 @@ export default function REPL({
   return (
     <Box flexDirection="column">
       {/* Message history — rendered via Static (locked, never re-renders) */}
-      <Static items={messages}>
+      <Static items={messages.filter((msg) => !msg.meta?.hidden)}>
         {(msg: Message, i: number) => {
           const showDivider = msg.role === "user" && i > 0;
           if (msg.role === "user") {

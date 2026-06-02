@@ -24,7 +24,7 @@ export type Message = {
   readonly uuid: string;
   readonly timestamp: number;
   /** Optional display hints — not sent to LLM */
-  readonly meta?: { isInfo?: boolean; pinned?: boolean; isStreaming?: boolean };
+  readonly meta?: { isInfo?: boolean; pinned?: boolean; isStreaming?: boolean; hidden?: boolean };
 };
 
 export function createMessage(
@@ -51,6 +51,10 @@ export function createPinnedMessage(content: string): Message {
 
 export function createUserMessage(content: string): Message {
   return createMessage("user", content);
+}
+
+export function createHiddenUserMessage(content: string): Message {
+  return createMessage("user", content, { meta: { hidden: true } });
 }
 
 export function createAssistantMessage(content: string, toolCalls?: readonly ToolCall[]): Message {

@@ -10,7 +10,7 @@ Usage::
     from openharness import OpenHarnessClient, OpenHarnessOptions
 
     opts = OpenHarnessOptions(
-        model="ollama/llama3",
+        model="ollama/qwen3:4b",
         permission_mode="trust",
         max_turns=5,
     )
@@ -80,5 +80,4 @@ class OpenHarnessOptions:
             if v is not None:
                 out[f.name] = v
         return out
-
 

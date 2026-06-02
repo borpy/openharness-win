@@ -148,6 +148,7 @@ export function rasterize(state: LayoutState, grid: CellGrid): { cursorRow: numb
   // Messages area (top)
   const allContent: Array<{ role: string; content: string; style: Style; prefixStyle: Style; prefix: string }> = [];
   for (const msg of state.messages) {
+    if (msg.meta?.hidden) continue;
     if (msg.role === "user") {
       allContent.push({
         role: "user",

@@ -7,7 +7,7 @@ Quick start::
     from openharness import query, TextDelta
 
     async def main() -> None:
-        async for event in query("What is 2+2?", model="ollama/llama3", max_turns=1):
+        async for event in query("What is 2+2?", model="ollama/qwen3:4b", max_turns=1):
             if isinstance(event, TextDelta):
                 print(event.content, end="")
 

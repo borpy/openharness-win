@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHiddenUserMessage } from "../types/message.js";
+import { createImageContextContent } from "../utils/image-context.js";
 import { AnthropicProvider } from "./anthropic.js";
 
 test("Anthropic healthCheck returns true when apiKey is set", async () => {
@@ -121,4 +123,30 @@ test("stream() preserves 'max' for Opus", async () => {
     globalThis.fetch = orig;
   }
   assert.deepEqual(captured.output_config, { effort: "max" });
+});
+
+test("stream() sends hidden image context as Anthropic image block", async () => {
+  let captured: any;
+  const orig = globalThis.fetch;
+  globalThis.fetch = async (_url: any, init: any) => {
+    captured = JSON.parse(init.body);
+    return { ok: false, status: 500, text: async () => "stop" } as any;
+  };
+  try {
+    const p = new AnthropicProvider({ name: "anthropic", apiKey: "test" });
+    const imageMessage = createHiddenUserMessage(
+      createImageContextContent({ mediaType: "image/png", base64: "ZmFrZQ==", source: "test" }),
+    );
+    const gen = p.stream([imageMessage], "system", undefined, "claude-sonnet-4-6");
+    await assert.rejects(async () => {
+      for await (const _ of gen) {
+      }
+    });
+  } finally {
+    globalThis.fetch = orig;
+  }
+  const content = captured.messages[0].content;
+  assert.equal(content[0].type, "text");
+  assert.equal(content[1].type, "image");
+  assert.deepEqual(content[1].source, { type: "base64", media_type: "image/png", data: "ZmFrZQ==" });
 });

@@ -280,7 +280,10 @@ test("/tools lists available tools", async () => {
   assert.ok(result);
   assert.equal(result.handled, true);
   assert.ok(result.output.includes("Available Tools"));
-  assert.ok(result.output.includes("Built-in"));
+  assert.ok(result.output.includes("Built-in (46)"));
+  assert.ok(result.output.includes("GitHubRead"));
+  assert.ok(result.output.includes("GitHubWrite"));
+  assert.ok(result.output.includes("ToolSearch"));
 });
 
 // ── /terminal-setup ──

@@ -18,6 +18,8 @@ export type { CommandContext, CommandHandler, CommandResult } from "./types.js";
 import { registerAICommands } from "./ai.js";
 import { registerGitCommands } from "./git.js";
 import { registerInfoCommands } from "./info.js";
+import { registerMediaCommands } from "./media.js";
+import { registerOllamaCommands } from "./ollama.js";
 import { registerSessionCommands } from "./session.js";
 import { registerSettingsCommands } from "./settings.js";
 import { registerSkillCommands } from "./skills.js";
@@ -56,6 +58,8 @@ function registerFor(category: CommandCategory) {
 registerSessionCommands(registerFor("Session"));
 registerGitCommands(registerFor("Git"));
 registerInfoCommands(registerFor("Info"), () => commands);
+registerMediaCommands(registerFor("Info"));
+registerOllamaCommands(registerFor("Info"));
 registerSettingsCommands(registerFor("Settings"));
 registerAICommands(registerFor("AI"));
 registerSkillCommands(registerFor("Skills"));

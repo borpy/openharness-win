@@ -21,7 +21,7 @@ Route different parts of your conversation to different models automatically. Co
 provider: anthropic
 model: claude-sonnet-4-6
 modelRouter:
-  fast: ollama/qwen2.5:7b         # exploration, tool dispatching
+  fast: ollama/qwen3:4b           # exploration, tool dispatching
   balanced: gpt-4o-mini           # general turns
   powerful: claude-opus-4-7       # final responses, code-review sub-agents
 ```
@@ -44,7 +44,7 @@ Inspect the current router state and the last selection for your session:
 ```
 > /router
 Model router:
-  fast       ollama/qwen2.5:7b
+  fast       ollama/qwen3:4b
   balanced   gpt-4o-mini
   powerful   claude-opus-4-7
 
@@ -64,7 +64,7 @@ When unconfigured: `Router: off (single model: claude-sonnet-4-6)`.
 ```yaml
 # Provider and model
 provider: ollama          # ollama, openai, anthropic, openrouter, llamacpp, lmstudio
-model: llama3             # model identifier
+model: qwen3:4b           # model identifier
 apiKey: sk-...            # API key (or use environment variable)
 baseUrl: http://localhost:11434  # custom base URL
 
@@ -85,7 +85,7 @@ verification:
 
 # Multi-model router — use different models per task type
 modelRouter:
-  fast: ollama/qwen2.5:7b        # exploration, search
+  fast: ollama/qwen3:4b          # exploration, search
   balanced: gpt-4o-mini           # general use
   powerful: claude-sonnet-4-6     # code review, final output
 
@@ -132,8 +132,10 @@ telemetry:
   enabled: false
 
 # Status bar
-statusLineFormat: "{model} {tokens} {cost}"
+statusLineFormat: "{model} {tokens} {cost} {ctx} {resources} {perf}"
 ```
+
+Status-line templates support `{model}`, `{tokens}`, `{cost}`, `{ctx}` (used/max context window), `{resources}` (RAM/VRAM), `{perf}` (live prompt benchmark), and `{dials}` (context + resources). VRAM supports NVIDIA through `nvidia-smi`, AMD through `amd-smi`/`rocm-smi`, and Windows AMD fallback through WMI/performance counters; it displays `n/a` when no supported telemetry source is available.
 
 ## Fallback providers
 
@@ -148,7 +150,7 @@ fallbackProviders:
     model: gpt-4o-mini
     apiKey: ${OPENAI_API_KEY}
   - provider: ollama
-    model: llama3
+    model: qwen3:4b
     baseUrl: http://localhost:11434
 ```
 

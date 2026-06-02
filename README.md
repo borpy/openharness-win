@@ -21,7 +21,7 @@ AI coding agent in your terminal. Works with any LLM -- free local models or clo
   <img src="assets/openharness_v0.11.1_4.gif" alt="OpenHarness demo" width="800" />
 </p>
 
-[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1502-brightgreen) ![tools](https://img.shields.io/badge/tools-44-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/zhijiewong/openharness)](https://github.com/zhijiewong/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/zhijiewong/openharness)](https://github.com/zhijiewong/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/zhijiewong/openharness/pulls)
+[![npm version](https://img.shields.io/npm/v/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![npm downloads](https://img.shields.io/npm/dm/@zhijiewang/openharness)](https://www.npmjs.com/package/@zhijiewang/openharness) [![license](https://img.shields.io/npm/l/@zhijiewang/openharness)](LICENSE) ![tests](https://img.shields.io/badge/tests-1737-brightgreen) ![tools](https://img.shields.io/badge/tools-46-blue) ![Node.js 18+](https://img.shields.io/badge/node-18%2B-green) ![TypeScript](https://img.shields.io/badge/typescript-strict-blue) [![GitHub stars](https://img.shields.io/github/stars/zhijiewong/openharness)](https://github.com/zhijiewong/openharness) [![GitHub issues](https://img.shields.io/github/issues-raw/zhijiewong/openharness)](https://github.com/zhijiewong/openharness/issues) [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](https://github.com/zhijiewong/openharness/pulls)
 
 **English** | [简体中文](README.zh-CN.md)
 
@@ -32,7 +32,7 @@ AI coding agent in your terminal. Works with any LLM -- free local models or clo
 - [Quick Start](#quick-start)
 - [Why OpenHarness?](#why-openharness)
 - [Terminal UI](#terminal-ui)
-- [Tools (44)](#tools-43)
+- [Tools (46)](#tools-46)
 - [Slash Commands](#slash-commands)
 - [Permission Modes](#permission-modes)
 - [Hooks](#hooks)
@@ -60,7 +60,8 @@ npm install -g @zhijiewang/openharness
 oh
 ```
 
-That's it. OpenHarness auto-detects Ollama and starts chatting. No API key needed.
+That's it. OpenHarness connects to local Ollama and prefers an installed Qwen3 model (for example `qwen3:4b`). No API key needed.
+Inside a session, run `/ollama` for the local control panel: server polling, installed models, model switching, pulls, and request diagnostics.
 
 **Python SDK:** there's also an official Python SDK for driving `oh` from Python programs (notebooks, batch scripts, ML pipelines). Install with `pip install openharness-sdk` after the npm install (the PyPI distribution is `openharness-sdk` because the unqualified name is taken), then `from openharness import query`. See [`python/README.md`](python/README.md).
 
@@ -69,7 +70,7 @@ That's it. OpenHarness auto-detects Ollama and starts chatting. No API key neede
 ```bash
 oh init                               # interactive setup wizard (provider + cybergotchi)
 oh                                    # auto-detect local model
-oh --model ollama/qwen2.5:7b         # specific model
+oh --model ollama/qwen3:4b           # specific local model
 oh --model gpt-4o                     # cloud model (needs OPENAI_API_KEY)
 oh --trust                            # auto-approve all tool calls
 oh --auto                             # auto-approve, block dangerous bash
@@ -79,10 +80,14 @@ oh run "review code" --json           # CI/CD with JSON output
 
 **In-session commands:**
 ```
+/ollama                               # inspect local Ollama, switch/pull models, diagnose blockers
+/paste-image                          # attach a copied screenshot/image as hidden context
+/queue                                # view queued prompts; /queue clear or /queue run
 /rewind                               # undo last AI file change (checkpoint restore)
 /roles                                # list agent specializations
 /vim                                  # toggle vim mode
 Ctrl+O                                # flush transcript to scrollback for review
+Ctrl+V                                # attach clipboard screenshot/image when available
 ```
 
 ## Why OpenHarness?
@@ -104,6 +109,7 @@ OpenHarness features a sequential terminal renderer inspired by Ink/Claude Code'
 | `Ctrl+A` / `Ctrl+E` | Jump to start / end of input |
 | `Ctrl+O` | Toggle thinking block expansion |
 | `Ctrl+K` | Toggle code block expansion in messages |
+| `Ctrl+V` | Attach a copied screenshot/image to hidden model context |
 | `Tab` | Autocomplete slash commands / file paths / cycle tool outputs |
 | `/vim` | Toggle Vim mode (normal/insert) |
 
@@ -122,6 +128,8 @@ Scrolling is handled by the terminal's native scrollbar. Completed messages flow
 - **Multi-line input wrap glyph** — every non-last line of a multi-line input ends with a dim `↵` continuation marker so the wrap is visually obvious
 - **Permission prompts** — bordered box with risk coloring, bold colored **Y**es/**N**o/**D**iff keys, syntax-highlighted inline diffs
 - **Status line** — model name, token count, cost, context usage bar (customizable via config)
+- **Prompt queue** — prompts entered while a request is running execute FIFO after completion; `/queue` shows pending work, `/queue clear` drops it, and `/queue run` resumes after a health pause
+- **Screenshot context** — `Ctrl+V`, `/paste-image`, or `/screenshot` attaches a clipboard image as hidden context for multimodal providers without printing base64 into the transcript
 - **Context warning** — yellow alert when context window exceeds 75%
 - **Native terminal scrollbar** — completed messages flow into scrollback; use your terminal's scrollbar and search
 - **Multi-line input** — `Alt+Enter` for newlines; paste detection auto-inserts newlines
@@ -145,12 +153,14 @@ Theme preference is saved to `.oh/config.yaml` and persists across sessions.
 Customize the status bar format in `.oh/config.yaml`:
 
 ```yaml
-statusLineFormat: '{model} │ {tokens} │ {cost} │ {ctx}'
+statusLineFormat: '{model} │ {tokens} │ {cost} │ {ctx} │ {resources} │ {perf}'
 ```
 
-Available variables: `{model}`, `{tokens}` (input↑ output↓), `{cost}` ($X.XXXX), `{ctx}` (context usage bar). Empty sections are automatically collapsed.
+Available variables: `{model}`, `{tokens}` (input↑ output↓), `{cost}` ($X.XXXX), `{ctx}` (used/max context dial), `{resources}` (RAM/VRAM dials), `{perf}` (live prompt benchmark), and `{dials}` (context + resources together). Empty sections are automatically collapsed.
 
-## Tools (44)
+The default status line shows prompt elapsed time, input/output tokens, output tokens/sec, time to first token, context used out of the model window, system RAM, and VRAM. GPU telemetry supports NVIDIA via `nvidia-smi`, AMD via `amd-smi`/`rocm-smi`, and Windows AMD fallback through WMI/performance counters; it reports `n/a` only when no supported GPU telemetry source is available.
+
+## Tools (46)
 
 | Tool | Risk | Description |
 |------|------|-------------|
@@ -204,6 +214,9 @@ Available variables: `{model}`, `{tokens}` (input↑ output↓), `{cost}` ($X.XX
 | **MCP** | | |
 | ListMcpResources | low | List resources from connected MCP servers |
 | ReadMcpResource | low | Read a specific MCP resource by URI |
+| **GitHub** | | |
+| GitHubRead | low | Read GitHub repo, branch, PR, comment, and auth state via `gh` |
+| GitHubWrite | high | Push branches and create or check out PRs via local `git` and `gh` |
 | **Git Worktrees** | | |
 | EnterWorktree | medium | Create isolated git worktree |
 | ExitWorktree | medium | Remove a git worktree |
@@ -228,6 +241,7 @@ Over 80 commands are registered. The most-used ones are grouped below; see `/hel
 | `/browse` | Interactive session browser with preview |
 | `/resume <id>` | Resume a saved session |
 | `/fork` | Fork current session |
+| `/queue` | Show queued prompts; `/queue run` resumes and `/queue clear` drops pending prompts |
 
 **Git:**
 | Command | Description |
@@ -236,18 +250,24 @@ Over 80 commands are registered. The most-used ones are grouped below; see `/hel
 | `/undo` | Undo last AI commit |
 | `/commit [msg]` | Create a git commit |
 | `/log` | Show recent git commits |
+| `/branch [create <name> [base] \| switch <name> \| <name>]` | Show, create, or switch local branches |
+| `/github status` | Show GitHub remote, branch, upstream, `gh` auth, and current PR |
+| `/push [remote] [branch]` | Push a branch and set upstream |
+| `/pr list/view/create/comments/checkout` | GitHub PR workflows backed by the GitHub CLI |
 
 **Info:**
 | Command | Description |
 |---------|-------------|
 | `/help` | Show all available commands (categorized) |
-| `/cost` | Show session cost and token usage |
-| `/status` | Show model, mode, git branch, MCP servers |
+| `/cost` | Show session cost, token usage, and current/last prompt performance |
+| `/status` | Show model, mode, git branch, context/resources, MCP servers |
 | `/config` | Show configuration |
 | `/files` | List files in context |
 | `/model <name>` | Switch model mid-session |
 | `/memory` | View and search memories |
 | `/doctor` | Run diagnostic health checks |
+| `/paste-image` | Attach a copied screenshot/image as hidden model context |
+| `/ollama` | Poll Ollama, inspect models, switch/pull models, and diagnose serving blockers |
 | `/hooks` | List loaded hooks grouped by event |
 | `/reload-plugins` | Hot-reload plugins, skills, hooks, and MCP server connections without restarting the session |
 
@@ -462,6 +482,35 @@ oh: Write tests/app.test.ts
 - `/diff` shows what changed
 - Your dirty files are safe — committed separately before AI edits
 
+### GitHub repo workflows
+
+OpenHarness can connect local git state to GitHub through the GitHub CLI:
+
+```bash
+gh auth login
+oh
+```
+
+In-session:
+
+```
+/github status
+/branch create feature/my-change main
+/commit "feat: add workflow"
+/push
+/pr create --title "Add workflow" --body "Summary"   # draft PR by default
+/pr create --title "Add workflow" --ready            # ready PR
+/pr view
+/pr comments
+/pr checkout 123
+```
+
+Remote writes are explicit: commits stay local until `/push`, and PR creation requires an upstream branch. Force-push, merge, branch deletion, releases, and issue management are intentionally out of scope for the first pass.
+
+`/github status` reports the working tree, local-vs-tracking diff, and branch-vs-base diff from the fetched refs already in your repo. Run `git fetch` first when you need a fresh remote comparison.
+
+OpenHarness is dirty-tree aware while coding: when a prompt starts with uncommitted files, the agent prompt includes the current dirty snapshot and distinguishes pre-existing changes from files dirtied by later prompts. Follow-up prompts are expected to layer new edits on top of those uncommitted changes without discarding unrelated hunks.
+
 ## Checkpoints & Rewind
 
 Every file modification is automatically checkpointed before execution. If something goes wrong:
@@ -583,11 +632,11 @@ Run a single prompt without interactive UI — perfect for CI/CD and scripting:
 
 ```bash
 # Chat command with -p flag (recommended)
-oh -p "fix the failing tests" --model ollama/llama3 --trust
+oh -p "fix the failing tests" --model ollama/qwen3:4b --trust
 oh -p "review src/query.ts" --auto --output-format json
 
 # Run command (alternative)
-oh run "fix the failing tests" --model ollama/llama3 --trust
+oh run "fix the failing tests" --model ollama/qwen3:4b --trust
 oh run "add error handling to api.ts" --json    # JSON output
 
 # Pipe stdin
@@ -663,8 +712,9 @@ Exit code 0 on success, 1 on failure.
 
 ```bash
 # Local (free, no API key needed)
-oh --model ollama/llama3
-oh --model ollama/qwen2.5:7b
+ollama pull qwen3:4b
+oh --model ollama/qwen3:4b
+# In-session: /ollama, /ollama switch <model>, /ollama diagnose, /ollama poll
 
 # Cloud
 OPENAI_API_KEY=sk-... oh --model gpt-4o
@@ -762,7 +812,7 @@ Set your default provider once globally:
 ```yaml
 # ~/.oh/config.yaml
 provider: ollama
-model: llama3
+model: qwen3:4b
 permissionMode: ask
 theme: dark
 language: zh-CN        # optional — respond in this language (code stays as-is)
@@ -944,12 +994,25 @@ cd openharness
 npm install && npm install -g .
 ```
 
+### Windows portable zip
+
+On Windows, build a portable bundle that includes `node.exe`, production dependencies, and `oh.cmd` launchers:
+
+```powershell
+npm ci
+npm run package:windows
+```
+
+The zip is written to `release/openharness-v<version>-win32-<arch>.zip`.
+
 ## Development
 
 ```bash
 npm install
 npx tsx src/main.tsx              # run in dev mode
-npx tsc --noEmit                  # type check
+npm run typecheck                 # type check
+npm run build:all                 # build CLI and TypeScript SDK
+npm run package:windows           # Windows portable zip
 npm test                          # run tests
 ```
 
@@ -978,4 +1041,3 @@ Join the OpenHarness community to get help, share your workflows, and discuss th
 ## License
 
 MIT
-

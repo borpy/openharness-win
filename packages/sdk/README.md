@@ -28,7 +28,7 @@ Requires Node.js ≥ 18. ESM-only.
 import { query } from "@zhijiewang/openharness-sdk";
 
 for await (const event of query("Summarize README.md in this directory.", {
-  model: "ollama/llama3",
+  model: "ollama/qwen3:4b",
   permissionMode: "trust",
   maxTurns: 5,
 })) {
@@ -45,7 +45,7 @@ For conversations that span multiple prompts, use `OpenHarnessClient`:
 ```ts
 import { OpenHarnessClient } from "@zhijiewang/openharness-sdk";
 
-const client = new OpenHarnessClient({ model: "ollama/llama3", permissionMode: "trust" });
+const client = new OpenHarnessClient({ model: "ollama/qwen3:4b", permissionMode: "trust" });
 try {
   for await (const event of client.send("What is 1+1?")) {
     if (event.type === "text") process.stdout.write(event.content);
@@ -63,7 +63,7 @@ try {
 In TypeScript 5.2+ on Node 20+, you can use explicit resource management for automatic cleanup:
 
 ```ts
-await using client = new OpenHarnessClient({ model: "ollama/llama3" });
+await using client = new OpenHarnessClient({ model: "ollama/qwen3:4b" });
 for await (const e of client.send("...")) { /* ... */ }
 // client.close() runs at scope exit, even on throw
 ```
@@ -88,7 +88,7 @@ const getWeather = tool({
 });
 
 await using client = new OpenHarnessClient({
-  model: "ollama/llama3",
+  model: "ollama/qwen3:4b",
   tools: [getWeather],
 });
 
@@ -122,7 +122,7 @@ async function gate(ctx: PermissionContext) {
   return "allow";
 }
 
-await using client = new OpenHarnessClient({ model: "ollama/llama3", canUseTool: gate });
+await using client = new OpenHarnessClient({ model: "ollama/qwen3:4b", canUseTool: gate });
 for await (const event of client.send("List the current directory")) {
   if (event.type === "hook_decision") {
     console.log("decision:", event.decision, event.reason);
@@ -147,13 +147,13 @@ import { OpenHarnessClient } from "@zhijiewang/openharness-sdk";
 
 let sid: string | null;
 {
-  await using c1 = new OpenHarnessClient({ model: "ollama/llama3" });
+  await using c1 = new OpenHarnessClient({ model: "ollama/qwen3:4b" });
   for await (const _ of c1.send("Remember that my favorite color is teal.")) void _;
   sid = c1.sessionId;
 }
 
 // Later — possibly in a new process:
-await using c2 = new OpenHarnessClient({ model: "ollama/llama3", resume: sid ?? undefined });
+await using c2 = new OpenHarnessClient({ model: "ollama/qwen3:4b", resume: sid ?? undefined });
 for await (const e of c2.send("What's my favorite color?")) {
   if (e.type === "text") process.stdout.write(e.content);
 }
@@ -162,7 +162,7 @@ for await (const e of c2.send("What's my favorite color?")) {
 `settingSources` controls which config layers the CLI merges (`"user"` = `~/.oh/config.yaml`, `"project"` = `./.oh/config.yaml`, `"local"` = `./.oh/config.local.yaml`). Omit to use all three; pass a subset to scope the run:
 
 ```ts
-const opts = { model: "ollama/llama3", settingSources: ["user", "project"] as const };
+const opts = { model: "ollama/qwen3:4b", settingSources: ["user", "project"] as const };
 for await (const e of query("What does my project config look like?", opts)) { /* ... */ }
 ```
 
@@ -174,7 +174,7 @@ for await (const e of query("What does my project config look like?", opts)) { /
 import { OpenHarnessClient, OpenHarnessOptionsBundle } from "@zhijiewang/openharness-sdk";
 
 const opts = new OpenHarnessOptionsBundle({
-  model: "ollama/llama3",
+  model: "ollama/qwen3:4b",
   permissionMode: "trust",
   maxTurns: 5,
   settingSources: ["user", "project"],
@@ -194,7 +194,7 @@ Run a single prompt through `oh` and stream events as they arrive.
 
 | Option | Type | Default | Description |
 |---|---|---|---|
-| `model` | `string` | from config | Model string (e.g. `"ollama/llama3"`, `"claude-sonnet-4-6"`). |
+| `model` | `string` | from config | Model string (e.g. `"ollama/qwen3:4b"`, `"claude-sonnet-4-6"`). |
 | `permissionMode` | `PermissionMode` | `"trust"` | `"ask"`, `"trust"`, `"deny"`, `"acceptEdits"`, `"plan"`, `"auto"`, `"bypassPermissions"`. |
 | `allowedTools` | `readonly string[]` | — | Whitelist of tool names. |
 | `disallowedTools` | `readonly string[]` | — | Blacklist of tool names. |

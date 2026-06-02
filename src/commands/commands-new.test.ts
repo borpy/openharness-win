@@ -55,6 +55,16 @@ test("/help lists /hooks in the Info category", async () => {
   assert.ok(result.output.includes("hooks"));
 });
 
+test("/help lists prompt queue and GitHub workflow commands", async () => {
+  const result = await processSlashCommand("/help", makeCtx());
+  assert.ok(result);
+  assert.equal(result.handled, true);
+  assert.match(result.output, /\/queue/);
+  assert.match(result.output, /\/github/);
+  assert.match(result.output, /\/push/);
+  assert.match(result.output, /\/pr/);
+});
+
 // ── /context ──
 
 test("/context shows context window breakdown", async () => {

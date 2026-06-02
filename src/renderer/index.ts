@@ -544,6 +544,10 @@ export class TerminalRenderer {
     const textWidth = this.flushTextWidth();
     while (this.flushedMessageCount < messages.length) {
       const msg = messages[this.flushedMessageCount]!;
+      if (msg.meta?.hidden) {
+        this.flushedMessageCount++;
+        continue;
+      }
       // Don't flush the message currently being streamed
       if (this.state.loading && this.flushedMessageCount === messages.length - 1 && msg.meta?.isStreaming) break;
 

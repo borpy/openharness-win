@@ -10,6 +10,10 @@ export function estimateMessageTokens(messages: Message[], startFrom = 0): numbe
   let total = 0;
   for (let i = startFrom; i < messages.length; i++) {
     const m = messages[i]!;
+    if (m.meta?.hidden && m.content.includes("__IMAGE__:")) {
+      total += 1500;
+      continue;
+    }
     total += Math.ceil(m.content.length / 3.5);
     if (m.toolCalls) {
       for (const tc of m.toolCalls) {

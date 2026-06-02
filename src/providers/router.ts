@@ -12,7 +12,7 @@
 export type ModelTier = "fast" | "balanced" | "powerful";
 
 export type RouterConfig = {
-  fast?: string; // e.g., "ollama/qwen2.5:7b"
+  fast?: string; // e.g., "ollama/qwen3:4b"
   balanced?: string; // e.g., "gpt-4o-mini"
   powerful?: string; // e.g., "claude-sonnet-4-6"
 };

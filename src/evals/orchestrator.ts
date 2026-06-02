@@ -411,7 +411,10 @@ function captureGitDiff(worktreeDir: string): string {
   // .git at the worktree root.
   for (const dir of [join(worktreeDir, "repo"), worktreeDir]) {
     try {
-      const out = execFileSync("git", ["-C", dir, "diff", "HEAD"], { encoding: "utf-8" });
+      const out = execFileSync("git", ["-C", dir, "diff", "HEAD"], {
+        encoding: "utf-8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
       if (out) return out;
     } catch {
       /* try next */
@@ -496,6 +499,12 @@ async function runSetupScript(
       cwd: worktreeDir,
       encoding: "utf-8",
     });
+    if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ENOENT") {
+      r = spawnSync("cmd.exe", ["/d", "/s", "/c", patched], {
+        cwd: worktreeDir,
+        encoding: "utf-8",
+      });
+    }
     try {
       unlinkSync(tmpSetup);
     } catch {
@@ -505,7 +514,11 @@ async function runSetupScript(
     r = spawnSync("/bin/sh", [setupPath], { cwd: worktreeDir, encoding: "utf-8" });
   }
   if (r.status !== 0) {
-    return { ok: false, error: String(r.stderr ?? "").slice(-500) };
+    const error = [String(r.stderr ?? ""), String(r.stdout ?? ""), r.error ? String(r.error) : ""]
+      .filter((part) => part.trim().length > 0)
+      .join("\n")
+      .slice(-500);
+    return { ok: false, error };
   }
   return { ok: true };
 }

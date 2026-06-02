@@ -427,6 +427,23 @@ describe("Autocomplete rendering", () => {
     assert.ok(all.includes("history"), "Second suggestion not visible");
   });
 
+  it("keeps long command names from overlapping descriptions", () => {
+    const state = makeState({
+      inputText: "/release",
+      autocomplete: ["release-notes"],
+      autocompleteDescriptions: ["Generate release notes from recent commits"],
+      autocompleteIndex: 0,
+    });
+    const grid = new CellGrid(80, 24);
+    rasterize(state, grid);
+    const row = findRow(grid, "release-notes");
+    assert.notEqual(row, -1, "Long command suggestion not visible");
+    const line = gridText(grid, row);
+    const commandEnd = line.indexOf("release-notes") + "release-notes".length;
+    const descriptionStart = line.indexOf("Generate release notes");
+    assert.ok(descriptionStart > commandEnd, `description overlapped command: ${line}`);
+  });
+
   // ── audit U-A3: categorized picker ──
 
   it("draws a category header before the first entry of each category", () => {

@@ -447,6 +447,7 @@ export function renderAutocompleteSection(
   if (state.autocomplete.length === 0) return nextRow;
   const w = grid.width;
   let lastCategory = "";
+  const nameWidth = Math.max(12, ...state.autocomplete.map((cmd) => cmd.length));
   for (let ai = 0; ai < state.autocomplete.length; ai++) {
     if (nextRow >= limit) break;
     // Category header — draw whenever the category changes between entries.
@@ -463,9 +464,9 @@ export function renderAutocompleteSection(
     const desc = state.autocompleteDescriptions[ai] ?? "";
     const selected = ai === state.autocompleteIndex;
     const acStyle = selected ? s(getTheme().user, true) : s(null, false, true);
-    grid.writeText(nextRow, promptWidth, `/${cmd.padEnd(12)}`, acStyle);
-    if (desc && w > promptWidth + 15)
-      grid.writeText(nextRow, promptWidth + 13, desc.slice(0, w - promptWidth - 15), S_DIM);
+    grid.writeText(nextRow, promptWidth, `/${cmd.padEnd(nameWidth)}`, acStyle);
+    const descStart = promptWidth + nameWidth + 2;
+    if (desc && w > descStart + 1) grid.writeText(nextRow, descStart, desc.slice(0, w - descStart - 1), S_DIM);
     nextRow++;
   }
   return nextRow;

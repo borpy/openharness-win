@@ -31,8 +31,8 @@
       "properties": {
         "openharness.model": {
           "type": "string",
-          "default": "ollama/llama3",
-          "description": "Default model (e.g., ollama/llama3, gpt-4o, claude-sonnet-4-6)"
+          "default": "ollama/qwen3:4b",
+          "description": "Default model (e.g., ollama/qwen3:4b, gpt-4o, claude-sonnet-4-6)"
         },
         "openharness.permissionMode": {
           "type": "string",

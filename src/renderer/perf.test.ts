@@ -1,4 +1,7 @@
 import assert from "node:assert";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { setActiveTheme } from "../utils/theme-data.js";
 import { CellGrid } from "./cells.js";
@@ -150,19 +153,30 @@ describe("query loop performance", () => {
     const { query } = await import("../query/index.js");
     const { createMockProvider, textResponseEvents } = await import("../test-helpers.js");
     const provider = createMockProvider([textResponseEvents("Hello")]);
+    const workingDir = mkdtempSync(join(tmpdir(), "oh-query-perf-"));
 
-    const start = performance.now();
-    for (let i = 0; i < 10; i++) {
-      // Reset provider for each iteration since createMockProvider's queue drains
-      const p = createMockProvider([textResponseEvents("Hello")]);
-      for await (const _ of query("hi", { provider: p, tools: [], systemPrompt: "test", permissionMode: "trust" })) {
-        // drain
+    try {
+      const start = performance.now();
+      for (let i = 0; i < 10; i++) {
+        // Reset provider for each iteration since createMockProvider's queue drains.
+        const p = createMockProvider([textResponseEvents("Hello")]);
+        for await (const _ of query("hi", {
+          provider: p,
+          tools: [],
+          systemPrompt: "test",
+          permissionMode: "trust",
+          workingDir,
+        })) {
+          // drain
+        }
       }
-    }
-    const perCall = (performance.now() - start) / 10;
+      const perCall = (performance.now() - start) / 10;
 
-    console.log(`  query() 1-turn: ${perCall.toFixed(2)}ms/call (budget 50ms)`);
-    assert.ok(perCall < 50, `Expected < 50ms/call, got ${perCall.toFixed(2)}ms`);
+      console.log(`  query() 1-turn: ${perCall.toFixed(2)}ms/call (budget 50ms)`);
+      assert.ok(perCall < 50, `Expected < 50ms/call, got ${perCall.toFixed(2)}ms`);
+    } finally {
+      rmSync(workingDir, { recursive: true, force: true });
+    }
     // Reference unused
     void provider;
   });

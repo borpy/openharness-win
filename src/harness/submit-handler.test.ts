@@ -2,7 +2,10 @@ import assert from "node:assert";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { makeTmpDir } from "../test-helpers.js";
+import { createHiddenUserMessage } from "../types/message.js";
+import { createImageContextContent } from "../utils/image-context.js";
 import { invalidateConfigCache } from "./config.js";
+import { estimateMessageTokens } from "./context-warning.js";
 import { CostTracker } from "./cost.js";
 import { invalidateHookCache } from "./hooks.js";
 import { handleUserInput, type SubmitContext } from "./submit-handler.js";
@@ -67,6 +70,18 @@ describe("handleUserInput", () => {
     assert.strictEqual(result.handled, true);
     const lastMsg = result.messages[result.messages.length - 1]!;
     assert.ok(lastMsg.content.includes("Unknown command"));
+  });
+});
+
+describe("hidden screenshot context", () => {
+  it("estimates hidden image context without counting base64 literally", () => {
+    const msg = createHiddenUserMessage(
+      createImageContextContent({
+        mediaType: "image/png",
+        base64: "a".repeat(100_000),
+      }),
+    );
+    assert.equal(estimateMessageTokens([msg]), 1500);
   });
 });
 

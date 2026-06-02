@@ -58,6 +58,7 @@ export function copyToClipboard(text: string): { ok: true; tool: string } | { ok
 function formatMessagesAsMarkdown(messages: readonly Message[]): string {
   const blocks: string[] = [];
   for (const m of messages) {
+    if (m.meta?.hidden) continue;
     if (m.role === "user") {
       blocks.push(`## User\n\n${m.content}`);
     } else if (m.role === "assistant") {
@@ -98,6 +99,14 @@ export function registerSessionCommands(
 ) {
   register("clear", "Clear conversation history", () => {
     return { output: "Conversation cleared.", handled: true, clearMessages: true };
+  });
+
+  register("queue", "Show, resume, or clear queued prompts in the interactive REPL", () => {
+    return {
+      output:
+        "Prompt queue is available in the interactive REPL.\nUse /queue to inspect pending prompts, /queue run to resume, or /queue clear to drop them.",
+      handled: true,
+    };
   });
 
   register("compact", "Compress conversation history (optional: focus keyword or message number)", (args, ctx) => {
@@ -167,7 +176,7 @@ export function registerSessionCommands(
         try {
           const full = loadSession(s.id, sessionDir);
           const hit = full.messages.find(
-            (m) => typeof m.content === "string" && m.content.toLowerCase().includes(term),
+            (m) => !m.meta?.hidden && typeof m.content === "string" && m.content.toLowerCase().includes(term),
           );
           if (hit) {
             const date = new Date(s.updatedAt).toLocaleDateString();
@@ -334,6 +343,7 @@ export function registerSessionCommands(
     const matches: string[] = [];
     for (let i = 0; i < ctx.messages.length; i++) {
       const msg = ctx.messages[i]!;
+      if (msg.meta?.hidden) continue;
       if (typeof msg.content === "string" && msg.content.toLowerCase().includes(term)) {
         const preview = msg.content.slice(0, 80).replace(/\n/g, " ");
         matches.push(`  #${i + 1} [${msg.role}]: ${preview}...`);

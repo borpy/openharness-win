@@ -5,7 +5,9 @@
 import type { StreamEvent, ToolCallComplete } from "../types/events.js";
 import type { Message, ToolCall } from "../types/message.js";
 import { createAssistantMessage } from "../types/message.js";
+import { parseImageContext } from "../utils/image-context.js";
 import type { APIToolDef, ModelInfo, Provider, ProviderConfig } from "./base.js";
+import { DEFAULT_LOCAL_OLLAMA_MODEL } from "./ollama-defaults.js";
 
 export class OllamaProvider implements Provider {
   readonly name = "ollama";
@@ -14,7 +16,7 @@ export class OllamaProvider implements Provider {
 
   constructor(config: ProviderConfig) {
     this.baseUrl = (config.baseUrl ?? "http://localhost:11434").replace(/\/$/, "");
-    this.defaultModel = config.defaultModel ?? "llama3.1";
+    this.defaultModel = config.defaultModel ?? DEFAULT_LOCAL_OLLAMA_MODEL;
   }
 
   /**
@@ -79,6 +81,15 @@ export class OllamaProvider implements Provider {
           });
         }
       } else {
+        const parsed = msg.role === "user" ? parseImageContext(msg.content) : null;
+        if (parsed && parsed.images.length > 0) {
+          converted.push({
+            role: "user",
+            content: parsed.text || "Attached screenshot/image context.",
+            images: parsed.images.filter((image) => image.mediaType.startsWith("image/")).map((image) => image.data),
+          });
+          continue;
+        }
         converted.push({
           role: msg.role === "user" ? "user" : msg.role === "assistant" ? "assistant" : msg.role,
           content: msg.content,

@@ -9,6 +9,7 @@
  */
 
 import { DeferredTool } from "../DeferredTool.js";
+import { buildDirtyTreeContext, rememberDirtyTreeSnapshot } from "../git/dirty-state.js";
 import { readOhConfig } from "../harness/config.js";
 import { getContextWindow } from "../harness/cost.js";
 import type { Provider } from "../providers/base.js";
@@ -102,6 +103,11 @@ export async function* query(
   let fullSystemPrompt = toolPrompts
     ? `${config.systemPrompt}\n\n# Available Tools\n\n${toolPrompts}`
     : config.systemPrompt;
+
+  const dirtyTreeContext = buildDirtyTreeContext(toolContext.workingDir, config.sessionId);
+  if (dirtyTreeContext) {
+    fullSystemPrompt += `\n\n# Git Dirty Tree Handling\n\n${dirtyTreeContext}`;
+  }
 
   // Auto-trigger skills matching user message
   try {
@@ -403,6 +409,7 @@ export async function* query(
 
     yield { type: "turn_complete", reason: "max_turns" };
   } finally {
+    rememberDirtyTreeSnapshot(toolContext.workingDir, config.sessionId);
     if (querySpanId) config.tracer?.endSpan(querySpanId, "ok", { turns: state.turn });
   }
 }

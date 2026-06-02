@@ -32,7 +32,7 @@ class OpenHarnessClient:
 
     Use as an async context manager::
 
-        async with OpenHarnessClient(model="ollama/llama3") as client:
+        async with OpenHarnessClient(model="ollama/qwen3:4b") as client:
             async for event in client.send("Hi, who are you?"):
                 print(event)
             async for event in client.send("And what can you do?"):  # remembers prior turn

@@ -6,6 +6,7 @@ import { IMAGE_PREFIX } from "../tools/ImageReadTool/index.js";
 import type { StreamEvent, ToolCallComplete } from "../types/events.js";
 import type { Message, ToolCall } from "../types/message.js";
 import { createAssistantMessage } from "../types/message.js";
+import { parseImageContext } from "../utils/image-context.js";
 import type { APIToolDef, ModelInfo, Provider, ProviderConfig } from "./base.js";
 
 export class OpenAIProvider implements Provider {
@@ -56,6 +57,22 @@ export class OpenAIProvider implements Provider {
               content: tr.output,
             });
           }
+        }
+      } else if (msg.role === "user") {
+        const parsed = parseImageContext(msg.content);
+        if (parsed.images.length > 0) {
+          out.push({
+            role: "user",
+            content: [
+              { type: "text", text: parsed.text || "Attached screenshot/image context." },
+              ...parsed.images.map((image) => ({
+                type: "image_url",
+                image_url: { url: `data:${image.mediaType};base64,${image.data}` },
+              })),
+            ],
+          });
+        } else {
+          out.push({ role: msg.role, content: msg.content });
         }
       } else {
         out.push({ role: msg.role, content: msg.content });

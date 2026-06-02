@@ -8,11 +8,12 @@ import type { Provider, ProviderConfig } from "./base.js";
 import { createFallbackProvider, type FallbackConfig } from "./fallback.js";
 import { LlamaCppProvider } from "./llamacpp.js";
 import { OllamaProvider } from "./ollama.js";
+import { DEFAULT_LOCAL_OLLAMA_MODEL, selectPreferredLocalOllamaModel } from "./ollama-defaults.js";
 import { OpenAIProvider } from "./openai.js";
 import { OpenRouterProvider } from "./openrouter.js";
 
 /**
- * Create a provider from a model string like "ollama/llama3" or "gpt-4o".
+ * Create a provider from a model string like "ollama/qwen3:4b" or "gpt-4o".
  *
  * `opts.fallbackModel` (audit B2) is the CLI override path for the existing
  * `fallbackProviders` config — when set, REPLACES the config-file fallbacks
@@ -27,28 +28,36 @@ export async function createProvider(
   overrides?: Partial<ProviderConfig>,
   opts: { fallbackModel?: string } = {},
 ): Promise<{ provider: Provider; model: string }> {
+  const explicitModelArg = modelArg?.trim();
+  const modelWasExplicit = explicitModelArg !== undefined && explicitModelArg.length > 0;
   let providerName = "ollama";
-  let model = "llama3";
+  let model = DEFAULT_LOCAL_OLLAMA_MODEL;
 
-  if (modelArg) {
-    if (modelArg.includes("/")) {
-      const [p, m] = modelArg.split("/", 2);
+  if (explicitModelArg) {
+    if (explicitModelArg.includes("/")) {
+      const [p, m] = explicitModelArg.split("/", 2);
       providerName = p!;
       model = m!;
     } else {
-      model = modelArg;
+      model = explicitModelArg;
       providerName = guessProviderFromModel(model);
     }
   }
 
-  const config: ProviderConfig = {
+  let config: ProviderConfig = {
     name: providerName,
     apiKey: process.env[`${providerName.toUpperCase()}_API_KEY`],
     defaultModel: model,
     ...overrides,
   };
 
-  const primary = createProviderInstance(providerName, config);
+  let primary = createProviderInstance(providerName, config);
+  if (!modelWasExplicit && providerName === "ollama" && "fetchModels" in primary) {
+    const models = await (primary as OllamaProvider).fetchModels();
+    model = selectPreferredLocalOllamaModel(models.map((m) => m.id));
+    config = { ...config, defaultModel: model };
+    primary = createProviderInstance(providerName, config);
+  }
 
   const fallbackCfgs = opts.fallbackModel
     ? [parseFallbackModel(opts.fallbackModel)]

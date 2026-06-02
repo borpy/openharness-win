@@ -17,7 +17,7 @@ AI coding agent in your editor — works with any LLM.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `openharness.model` | `ollama/llama3` | Default model |
+| `openharness.model` | `ollama/qwen3:4b` | Default model |
 | `openharness.permissionMode` | `ask` | Permission mode (ask, trust, deny, auto) |
 
 ## Usage

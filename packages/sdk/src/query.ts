@@ -41,7 +41,7 @@ export function buildArgv(prompt: string, options: OpenHarnessOptions = {}): str
  *
  * @example
  * ```ts
- * for await (const event of query("What is 2+2?", { model: "ollama/llama3" })) {
+ * for await (const event of query("What is 2+2?", { model: "ollama/qwen3:4b" })) {
  *   if (event.type === "text") process.stdout.write(event.content);
  * }
  * ```

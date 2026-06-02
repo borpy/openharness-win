@@ -3,7 +3,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { createSession, listSessions, loadSession, saveSession } from "./session.js";
+import { createAssistantMessage, createHiddenUserMessage, createUserMessage } from "../types/message.js";
+import { buildHibernateState, createSession, listSessions, loadSession, saveSession } from "./session.js";
 
 test("createSession() creates with id and empty messages", () => {
   const s = createSession("openai", "gpt-4o");
@@ -77,4 +78,16 @@ test("session has timestamps set on creation", () => {
   const after = Date.now();
   assert.ok(s.createdAt >= before && s.createdAt <= after);
   assert.ok(s.updatedAt >= before && s.updatedAt <= after);
+});
+
+test("buildHibernateState ignores hidden image context messages", () => {
+  const hibernate = buildHibernateState([
+    createUserMessage("visible request"),
+    createHiddenUserMessage("__IMAGE__:image/png:ZmFrZQ=="),
+    createAssistantMessage("visible answer"),
+  ]);
+
+  assert.ok(hibernate);
+  assert.equal(hibernate.lastUserMessage, "visible request");
+  assert.doesNotMatch(hibernate.summary ?? "", /__IMAGE__/);
 });

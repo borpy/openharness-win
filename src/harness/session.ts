@@ -136,14 +136,15 @@ export function getLastSessionId(dir?: string): string | null {
  * and a brief summary for context reconstruction on wake.
  */
 export function buildHibernateState(messages: Message[]): Session["hibernate"] {
-  if (messages.length === 0) return undefined;
+  const visibleMessages = messages.filter((m) => !m.meta?.hidden);
+  if (visibleMessages.length === 0) return undefined;
 
   // Find last user message
-  const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+  const lastUser = [...visibleMessages].reverse().find((m) => m.role === "user");
+  const lastAssistant = [...visibleMessages].reverse().find((m) => m.role === "assistant");
 
   // Build a brief summary from the last few exchanges
-  const recentMsgs = messages.slice(-6);
+  const recentMsgs = visibleMessages.slice(-6);
   const summaryParts: string[] = [];
   for (const m of recentMsgs) {
     if (m.role === "user") {

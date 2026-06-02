@@ -2,10 +2,89 @@
  * Git commands — /diff, /undo, /rewind, /commit, /log
  */
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { gitBranch, gitCommit, gitDiff, gitLog, gitUndo, isGitRepo } from "../git/index.js";
+import {
+  checkoutPullRequest,
+  createLocalBranch,
+  createPullRequest,
+  formatGitHubStatus,
+  formatPullRequest,
+  formatPullRequestComments,
+  formatPullRequestList,
+  githubStatus,
+  listPullRequests,
+  pullRequestComments,
+  pushCurrentBranch,
+  switchLocalBranch,
+  viewPullRequest,
+} from "../github/index.js";
 import { checkpointCount, listCheckpoints, rewindLastCheckpoint } from "../harness/checkpoints.js";
 import type { CommandHandler } from "./types.js";
+
+function tokenizeArgs(raw: string): string[] {
+  const tokens: string[] = [];
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(raw)) !== null) {
+    tokens.push((match[1] ?? match[2] ?? match[3] ?? "").replace(/\\"/g, '"'));
+  }
+  return tokens;
+}
+
+function githubFailure(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function runHandled(fn: () => string): { output: string; handled: true } {
+  try {
+    return { output: fn(), handled: true };
+  } catch (err) {
+    return { output: githubFailure(err), handled: true };
+  }
+}
+
+function parseFlagArgs(tokens: string[]): { flags: Record<string, string | boolean>; rest: string[] } {
+  const flags: Record<string, string | boolean> = {};
+  const rest: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i]!;
+    if (!token.startsWith("--")) {
+      rest.push(token);
+      continue;
+    }
+    const eqIdx = token.indexOf("=");
+    if (eqIdx !== -1) {
+      flags[token.slice(2, eqIdx)] = token.slice(eqIdx + 1);
+      continue;
+    }
+    const name = token.slice(2);
+    const next = tokens[i + 1];
+    if (next && !next.startsWith("--")) {
+      flags[name] = next;
+      i++;
+    } else {
+      flags[name] = true;
+    }
+  }
+  return { flags, rest };
+}
+
+function stringFlag(flags: Record<string, string | boolean>, name: string): string | undefined {
+  const value = flags[name];
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function prUsage(): string {
+  return [
+    "Usage:",
+    "  /pr list [--limit 20]",
+    "  /pr view [number|url]",
+    "  /pr create --title <title> [--body <body>] [--base <branch>] [--head <branch>] [--draft|--ready]",
+    "  /pr comments [number|url]",
+    "  /pr checkout <number|url>",
+  ].join("\n");
+}
 
 export function registerGitCommands(register: (name: string, description: string, handler: CommandHandler) => void) {
   register("diff", "Show uncommitted git changes", () => {
@@ -124,7 +203,8 @@ export function registerGitCommands(register: (name: string, description: string
     const range = args.trim() || "HEAD~10..HEAD";
     let log: string;
     try {
-      log = execSync(`git log --oneline ${range}`, { encoding: "utf-8" }).trim();
+      const res = spawnSync("git", ["log", "--oneline", range], { encoding: "utf-8", stdio: "pipe" });
+      log = res.status === 0 ? String(res.stdout).trim() : "";
     } catch {
       log = gitLog(10) || "";
     }
@@ -150,26 +230,106 @@ export function registerGitCommands(register: (name: string, description: string
     return { output: `Git stashes:\n${stashList}`, handled: true };
   });
 
-  register("branch", "Show or switch git branch", (args) => {
+  register("branch", "Show, create, or switch git branch", (args) => {
     if (!isGitRepo()) {
       return { output: "Not a git repository.", handled: true };
     }
-    const target = args.trim();
-    if (!target) {
+    const tokens = tokenizeArgs(args);
+    if (tokens.length === 0) {
       const current = gitBranch();
       let branches: string;
       try {
-        branches = execSync("git branch --list", { encoding: "utf-8" }).trim();
+        const res = spawnSync("git", ["branch", "--list"], { encoding: "utf-8", stdio: "pipe" });
+        branches = res.status === 0 ? String(res.stdout).trim() : current;
       } catch {
         branches = current;
       }
       return { output: `Current branch: ${current}\n\n${branches}`, handled: true };
     }
-    try {
-      execSync(`git checkout ${target}`, { encoding: "utf-8" });
-      return { output: `Switched to branch: ${target}`, handled: true };
-    } catch {
-      return { output: `Failed to switch to branch: ${target}. Does it exist?`, handled: true };
+
+    if (tokens[0] === "create") {
+      const branch = tokens[1];
+      if (!branch) return { output: "Usage: /branch create <name> [base]", handled: true };
+      return runHandled(() => createLocalBranch(process.cwd(), branch, tokens[2]));
     }
+
+    const target = tokens[0] === "switch" ? tokens[1] : tokens[0];
+    if (!target) return { output: "Usage: /branch [create <name> [base] | switch <name> | <name>]", handled: true };
+    return runHandled(() => switchLocalBranch(process.cwd(), target));
+  });
+
+  register("github", "Show GitHub repo and gh auth status", (args) => {
+    const subcommand = args.trim().toLowerCase() || "status";
+    if (subcommand !== "status") {
+      return { output: "Usage: /github status", handled: true };
+    }
+    if (!isGitRepo()) {
+      return { output: "Not a git repository.", handled: true };
+    }
+    return runHandled(() => formatGitHubStatus(githubStatus()));
+  });
+
+  register("push", "Push current branch to GitHub remote and set upstream", (args) => {
+    if (!isGitRepo()) {
+      return { output: "Not a git repository.", handled: true };
+    }
+    const tokens = tokenizeArgs(args);
+    const remote = tokens[0] || "origin";
+    const branch = tokens[1];
+    return runHandled(() => pushCurrentBranch(process.cwd(), remote, branch));
+  });
+
+  register("pr", "GitHub pull request workflows", (args) => {
+    if (!isGitRepo()) {
+      return { output: "Not a git repository.", handled: true };
+    }
+    const tokens = tokenizeArgs(args);
+    const subcommand = tokens.shift()?.toLowerCase();
+    if (!subcommand) return { output: prUsage(), handled: true };
+
+    if (subcommand === "list") {
+      const { flags } = parseFlagArgs(tokens);
+      const limitRaw = stringFlag(flags, "limit");
+      const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 20;
+      return runHandled(() =>
+        formatPullRequestList(listPullRequests(process.cwd(), Number.isFinite(limit) ? limit : 20)),
+      );
+    }
+
+    if (subcommand === "view") {
+      return runHandled(() => formatPullRequest(viewPullRequest(tokens[0])));
+    }
+
+    if (subcommand === "comments") {
+      return runHandled(() => formatPullRequestComments(pullRequestComments(tokens[0])));
+    }
+
+    if (subcommand === "checkout") {
+      const pr = tokens[0];
+      if (!pr) return { output: "Usage: /pr checkout <number|url>", handled: true };
+      return runHandled(() => checkoutPullRequest(pr));
+    }
+
+    if (subcommand === "create") {
+      const { flags, rest } = parseFlagArgs(tokens);
+      const title = stringFlag(flags, "title") ?? rest.join(" ");
+      if (!title) {
+        return {
+          output: "Usage: /pr create --title <title> [--body <body>] [--base <branch>] [--ready]",
+          handled: true,
+        };
+      }
+      return runHandled(() =>
+        createPullRequest({
+          title,
+          body: stringFlag(flags, "body"),
+          base: stringFlag(flags, "base"),
+          head: stringFlag(flags, "head"),
+          draft: !flags.ready,
+        }),
+      );
+    }
+
+    return { output: prUsage(), handled: true };
   });
 }

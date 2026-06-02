@@ -14,7 +14,7 @@ let terminal: vscode.Terminal | null = null;
 function getConfig() {
   const config = vscode.workspace.getConfiguration('openharness');
   return {
-    model: config.get<string>('model', 'ollama/llama3'),
+    model: config.get<string>('model', 'ollama/qwen3:4b'),
     permissionMode: config.get<string>('permissionMode', 'ask'),
   };
 }

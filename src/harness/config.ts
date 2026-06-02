@@ -165,11 +165,12 @@ export type OhConfig = {
    */
   apiKeyHelper?: string;
   toolPermissions?: ToolPermissionRule[];
-  statusLineFormat?: string; // Template: {model} {tokens} {cost} {ctx}
+  statusLineFormat?: string; // Template: {model} {tokens} {cost} {ctx} {resources} {perf} {dials}
   /**
    * JSON-envelope status line script (audit U-B1). When set, OH spawns
    * `command` through the user's shell on each refresh, pipes a JSON
-   * envelope `{ model, tokens, cost, ctx, sessionId, cwd, gitBranch }` to
+   * envelope `{ model, tokens, cost, contextPercent, performance, dials,
+   * sessionId, cwd, gitBranch }` to
    * stdin, and uses the trimmed stdout as the status line. Mirrors Claude
    * Code's `statusLine` config. Gated through the workspace-trust system —
    * scripts only run in trusted dirs.
@@ -199,7 +200,7 @@ export type OhConfig = {
   };
   /** Multi-model router — use different models for different task types */
   modelRouter?: {
-    fast?: string; // fast/cheap model for exploration (e.g., "ollama/qwen2.5:7b")
+    fast?: string; // fast/cheap model for exploration (e.g., "ollama/qwen3:4b")
     balanced?: string; // balanced model for general use (e.g., "gpt-4o-mini")
     powerful?: string; // strongest model for final output (e.g., "claude-sonnet-4-6")
   };

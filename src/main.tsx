@@ -5,7 +5,7 @@
  *
  * Usage:
  *   npx openharness                          # auto-detect provider, start chatting
- *   npx openharness --model ollama/llama3    # use specific model
+ *   npx openharness --model ollama/qwen3:4b  # use specific model
  *   npx openharness models                   # list models
  *   npx openharness tools                    # list tools
  */
@@ -826,7 +826,7 @@ program
 program
   .command("chat", { isDefault: true })
   .description("Start an interactive chat session")
-  .option("-m, --model <model>", "Model to use (e.g., ollama/llama3, gpt-4o)")
+  .option("-m, --model <model>", "Model to use (e.g., ollama/qwen3:4b, gpt-4o)")
   .addOption(
     new Option("--permission-mode <mode>", "Permission mode")
       .choices(["ask", "trust", "deny", "acceptEdits", "plan", "auto", "bypassPermissions"])
@@ -929,8 +929,8 @@ program
         console.log("  To get started, choose a provider:");
         console.log();
         console.log("  Local (free, no API key):");
-        console.log("    npx openharness --model ollama/llama3");
-        console.log("    npx openharness --model ollama/qwen2.5:7b-instruct");
+        console.log("    ollama pull qwen3:4b");
+        console.log("    npx openharness --model ollama/qwen3:4b");
         console.log();
         console.log("  Cloud (needs API key in env var):");
         console.log("    OPENAI_API_KEY=sk-... npx openharness --model gpt-4o");
@@ -1146,7 +1146,7 @@ program
       console.log(`  Provider: ollama (http://localhost:11434)`);
       console.log(`  ${"─".repeat(43)}`);
       try {
-        const { provider } = await createProvider("ollama/llama3");
+        const { provider } = await createProvider();
         const models =
           "fetchModels" in provider && typeof (provider as any).fetchModels === "function"
             ? await (provider as any).fetchModels()

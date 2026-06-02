@@ -16,15 +16,17 @@ export default function Messages({ messages, toolCalls }: MessagesProps) {
 
   return (
     <Box flexDirection="column">
-      {messages.map((msg, i) => {
-        const showDivider = msg.role === "user" && i > 0;
-        return (
-          <React.Fragment key={msg.uuid}>
-            {showDivider && <Text color={theme.dim}>{"─".repeat(60)}</Text>}
-            <MessageRow message={msg} toolCalls={toolCalls} theme={theme} />
-          </React.Fragment>
-        );
-      })}
+      {messages
+        .filter((msg) => !msg.meta?.hidden)
+        .map((msg, i) => {
+          const showDivider = msg.role === "user" && i > 0;
+          return (
+            <React.Fragment key={msg.uuid}>
+              {showDivider && <Text color={theme.dim}>{"─".repeat(60)}</Text>}
+              <MessageRow message={msg} toolCalls={toolCalls} theme={theme} />
+            </React.Fragment>
+          );
+        })}
     </Box>
   );
 }

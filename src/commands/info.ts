@@ -10,7 +10,9 @@ import { invalidateConfigCache, readOhConfig } from "../harness/config.js";
 import { estimateMessageTokens } from "../harness/context-warning.js";
 import { getContextWindow } from "../harness/cost.js";
 import { getHooks, invalidateHookCache } from "../harness/hooks.js";
+import { formatPerformanceReport } from "../harness/performance.js";
 import { discoverPlugins, discoverSkills } from "../harness/plugins.js";
+import { formatContextDial, formatResourceDials } from "../harness/runtime-dials.js";
 import { formatFlameGraph, formatTrace, listTracedSessions, loadTrace } from "../harness/traces.js";
 import { getVerificationConfig, invalidateVerificationCache } from "../harness/verification.js";
 import { normalizeMcpConfig } from "../mcp/config-normalize.js";
@@ -18,6 +20,7 @@ import { connectedMcpServers, disconnectMcpClients, loadMcpTools, mcpServerToolC
 import { getAuthStatus } from "../mcp/oauth.js";
 import { formatRegistry, generateConfigBlock, MCP_REGISTRY, searchRegistry } from "../mcp/registry.js";
 import { getRouteSelection } from "../providers/router.js";
+import { getAllTools } from "../tools.js";
 import { formatHooksReport } from "./hooks-report.js";
 import { mcpLoginHandler, mcpLogoutHandler } from "./mcp-auth.js";
 import type { CommandHandler } from "./types.js";
@@ -36,14 +39,31 @@ export function registerInfoCommands(
         "browse",
         "resume",
         "fork",
+        "queue",
         "pin",
         "unpin",
         "add-dir",
         "listen",
         "truncate",
         "search",
+        "copy",
+        "rebuild-sessions",
       ],
-      Git: ["diff", "undo", "rewind", "commit", "log", "review-pr", "pr-comments", "release-notes", "stash", "branch"],
+      Git: [
+        "diff",
+        "undo",
+        "rewind",
+        "commit",
+        "log",
+        "branch",
+        "github",
+        "push",
+        "pr",
+        "review-pr",
+        "pr-comments",
+        "release-notes",
+        "stash",
+      ],
       Info: [
         "help",
         "cost",
@@ -56,6 +76,9 @@ export function registerInfoCommands(
         "hooks",
         "traces",
         "context",
+        "paste-image",
+        "screenshot",
+        "ollama",
         "mcp",
         "mcp-login",
         "mcp-logout",
@@ -73,6 +96,7 @@ export function registerInfoCommands(
         "project",
         "stats",
         "tools",
+        "reload-plugins",
       ],
       Settings: [
         "theme",
@@ -89,17 +113,34 @@ export function registerInfoCommands(
         "verbose",
         "quiet",
         "provider",
+        "keybindings",
+        "trust",
       ],
-      AI: ["plan", "review", "roles", "agents", "plugins", "btw", "loop", "summarize", "explain", "fix"],
+      AI: [
+        "plan",
+        "review",
+        "roles",
+        "agents",
+        "plugins",
+        "plugin",
+        "btw",
+        "loop",
+        "summarize",
+        "explain",
+        "fix",
+        "recap",
+      ],
+      Skills: ["skills", "skill-create", "skill-delete", "skill-edit", "skill-search", "skill-install"],
       Pet: ["cybergotchi"],
     };
     const commands = getCommandMap();
     const lines: string[] = [];
     for (const [category, names] of Object.entries(categories)) {
       lines.push(`${category}:`);
+      const nameWidth = Math.max(12, ...names.map((name) => name.length));
       for (const name of names) {
         const cmd = commands.get(name);
-        if (cmd) lines.push(`  /${name.padEnd(12)} ${cmd.description}`);
+        if (cmd) lines.push(`  /${name.padEnd(nameWidth)} ${cmd.description}`);
       }
       lines.push("");
     }
@@ -107,9 +148,10 @@ export function registerInfoCommands(
     const uncategorized = [...commands.keys()].filter((n) => !categorized.has(n));
     if (uncategorized.length > 0) {
       lines.push("Other:");
+      const otherNameWidth = Math.max(12, ...uncategorized.map((name) => name.length));
       for (const name of uncategorized) {
         const cmd = commands.get(name)!;
-        lines.push(`  /${name.padEnd(12)} ${cmd.description}`);
+        lines.push(`  /${name.padEnd(otherNameWidth)} ${cmd.description}`);
       }
     }
     return { output: lines.join("\n"), handled: true };
@@ -122,12 +164,16 @@ export function registerInfoCommands(
       `Model:   ${ctx.model}`,
       `Session: ${ctx.sessionId}`,
     ];
+    if (ctx.performance && (ctx.performance.elapsedMs > 0 || ctx.performance.displayTotalTokens > 0)) {
+      lines.push("", formatPerformanceReport(ctx.performance));
+    }
     return { output: lines.join("\n"), handled: true };
   });
 
   register("status", "Show session status", (_args, ctx) => {
     const lines = [
       `Model:      ${ctx.model}`,
+      `Provider:   ${ctx.providerName}`,
       `Mode:       ${ctx.permissionMode}`,
       `Messages:   ${ctx.messages.length}`,
       `Cost:       $${ctx.totalCost.toFixed(4)}`,
@@ -135,6 +181,10 @@ export function registerInfoCommands(
     ];
     if (isGitRepo()) {
       lines.push(`Git branch: ${gitBranch()}`);
+    }
+    if (ctx.runtimeDials) {
+      lines.push(`Context:    ${formatContextDial(ctx.runtimeDials.context)}`);
+      lines.push(`Resources:  ${formatResourceDials(ctx.runtimeDials.resources)}`);
     }
     const mcp = connectedMcpServers();
     if (mcp.length > 0) {
@@ -178,7 +228,7 @@ export function registerInfoCommands(
     return { output: `Files in context:\n${[...files].map((f) => `  ${f}`).join("\n")}`, handled: true };
   });
 
-  register("model", "Switch model (e.g., /model llama3.2 or /model ollama/llama3.2)", (args, ctx) => {
+  register("model", "Switch model (e.g., /model qwen3:4b or /model ollama/qwen3:4b)", (args, ctx) => {
     const model = args.trim();
     if (!model)
       return { output: "Usage: /model <model-name>  (prefix with provider/ to switch providers)", handled: true };
@@ -595,7 +645,7 @@ export function registerInfoCommands(
         configPath,
         `# OpenHarness project config
 # provider: ollama
-# model: llama3
+# model: qwen3:4b
 # permissionMode: ask
 `,
       );
@@ -787,10 +837,20 @@ export function registerInfoCommands(
       `  Model:          ${ctx.model}`,
       `  Session ID:     ${ctx.sessionId}`,
     ];
+    if (ctx.runtimeDials) {
+      lines.push("", `  Context:        ${formatContextDial(ctx.runtimeDials.context)}`);
+      lines.push(`  Resources:      ${formatResourceDials(ctx.runtimeDials.resources)}`);
+    }
+    if (ctx.performance && (ctx.performance.elapsedMs > 0 || ctx.performance.displayTotalTokens > 0)) {
+      lines.push("", formatPerformanceReport(ctx.performance));
+    }
     return { output: lines.join("\n"), handled: true };
   });
 
   register("tools", "List available tools", (_args, ctx) => {
+    const builtInTools = getAllTools()
+      .map((tool) => tool.name)
+      .sort((a, b) => a.localeCompare(b));
     const toolNames = new Set<string>();
     for (const msg of ctx.messages) {
       if (msg.toolCalls) {
@@ -803,8 +863,14 @@ export function registerInfoCommands(
     const mcp = connectedMcpServers();
     const lines = ["Available Tools:"];
     lines.push("");
-    lines.push("  Built-in: Read, Write, Edit, Bash, Glob, Grep, Agent");
+    lines.push(`  Built-in (${builtInTools.length}):`);
+    for (let i = 0; i < builtInTools.length; i += 6) {
+      lines.push(`    ${builtInTools.slice(i, i + 6).join(", ")}`);
+    }
+    lines.push("");
+    lines.push("  Loading:  core tools are always available; deferred tools load on first use via ToolSearch");
     if (mcp.length > 0) {
+      lines.push("");
       lines.push(`  MCP:      ${mcp.join(", ")}`);
     }
     if (toolNames.size > 0) {
