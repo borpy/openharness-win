@@ -61,6 +61,13 @@ select:focus-visible {
   font-weight: 650;
 }
 
+.window-brand span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .brand-mark {
   width: 22px;
   height: 22px;

@@ -35,6 +35,9 @@ import type { DesktopAppState, DesktopRefreshStatus, DesktopStatusSnapshot, Desk
 import "./styles.css";
 
 type IconType = LucideIcon;
+const DESKTOP_PRODUCT_NAME = "OpenHarness for Windows";
+const DESKTOP_RELEASE_LABEL = "v1.0";
+const DESKTOP_WINDOW_TITLE = `${DESKTOP_PRODUCT_NAME} ${DESKTOP_RELEASE_LABEL}`;
 
 function installPreviewMockApi(): void {
   if (!import.meta.env.DEV || window.openHarnessDesktop || !new URLSearchParams(window.location.search).has("mock")) {
@@ -182,7 +185,7 @@ function installPreviewMockApi(): void {
     startTerminal: async () => terminalState,
     newChat: async () => {
       terminalListeners.forEach((listener) => {
-        listener("\r\nOpenHarness desktop preview\r\n/status\r\n");
+        listener(`\r\n${DESKTOP_WINDOW_TITLE} preview\r\n/status\r\n`);
       });
       return terminalState;
     },
@@ -226,7 +229,7 @@ function installPreviewMockApi(): void {
     onTerminalData: (listener) => {
       terminalListeners.add(listener);
       window.setTimeout(
-        () => listener("OpenHarness v2.47.0 ollama/qwen3:4b (ask)\r\n  C:\\code\\openharness\r\n"),
+        () => listener(`${DESKTOP_WINDOW_TITLE} ollama/qwen3:4b (ask)\r\n  C:\\code\\openharness\r\n`),
         100,
       );
       return () => terminalListeners.delete(listener);
@@ -1007,7 +1010,7 @@ function App() {
       <header className="titlebar">
         <div className="window-brand">
           <div className="brand-mark">OH</div>
-          <span>OpenHarness</span>
+          <span title={DESKTOP_WINDOW_TITLE}>{DESKTOP_WINDOW_TITLE}</span>
         </div>
         <div className="titlebar-status">
           <Pill

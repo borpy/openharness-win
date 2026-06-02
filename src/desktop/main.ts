@@ -22,6 +22,9 @@ import type { DesktopAppState, DesktopSettings, DesktopTerminalState } from "./t
 const desktopDistDir = fileURLToPath(new URL(".", import.meta.url));
 const rendererHtml = join(desktopDistDir, "renderer", "index.html");
 const preloadPath = join(desktopDistDir, "preload.js");
+const DESKTOP_PRODUCT_NAME = "OpenHarness for Windows";
+const DESKTOP_RELEASE_LABEL = "v1.0";
+const DESKTOP_WINDOW_TITLE = `${DESKTOP_PRODUCT_NAME} ${DESKTOP_RELEASE_LABEL}`;
 
 let mainWindow: BrowserWindow | null = null;
 let terminal: pty.IPty | null = null;
@@ -115,7 +118,7 @@ async function setWorkspace(path: string): Promise<DesktopAppState> {
 
 async function pickWorkspace(): Promise<DesktopAppState> {
   const options: Electron.OpenDialogOptions = {
-    title: "Choose an OpenHarness workspace",
+    title: `Choose a ${DESKTOP_PRODUCT_NAME} workspace`,
     properties: ["openDirectory", "createDirectory"],
   };
   const result = mainWindow ? await dialog.showOpenDialog(mainWindow, options) : await dialog.showOpenDialog(options);
@@ -300,7 +303,7 @@ function createWindow(): BrowserWindow {
     backgroundColor: "#111315",
     frame: false,
     show: false,
-    title: "OpenHarness",
+    title: DESKTOP_WINDOW_TITLE,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -320,10 +323,12 @@ function createWindow(): BrowserWindow {
     win.webContents.send("desktop:get-state", appState());
   });
   win.loadFile(rendererHtml).catch((err) => {
-    dialog.showErrorBox("OpenHarness Desktop", err instanceof Error ? err.message : String(err));
+    dialog.showErrorBox(DESKTOP_WINDOW_TITLE, err instanceof Error ? err.message : String(err));
   });
   return win;
 }
+
+app.setName(DESKTOP_PRODUCT_NAME);
 
 app.whenReady().then(async () => {
   await rm(statusDir(), { recursive: true, force: true }).catch(() => {});

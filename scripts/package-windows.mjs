@@ -9,10 +9,14 @@ const dryRun = args.has("--dry-run");
 const skipInstall = args.has("--skip-npm-install");
 
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf-8"));
-const version = pkg.version ?? "0.0.0";
+const packageVersion = pkg.version ?? "0.0.0";
+const windowsProductName = "OpenHarness for Windows";
+const windowsReleaseVersion = "1.0";
+const windowsReleaseLabel = `v${windowsReleaseVersion}`;
+const windowsExeName = `${windowsProductName}.exe`;
 const arch = process.arch === "arm64" ? "arm64" : "x64";
 const releaseDir = join(root, "release");
-const stageDir = join(releaseDir, `openharness-v${version}-win32-${arch}`);
+const stageDir = join(releaseDir, `OpenHarness-for-Windows-${windowsReleaseLabel}-win32-${arch}`);
 const appDir = join(stageDir, "resources", "app");
 const zipPath = `${stageDir}.zip`;
 
@@ -68,7 +72,9 @@ function electronDistDir() {
 function minimalDesktopPackageJson() {
   return {
     name: pkg.name,
-    version: pkg.version,
+    version: packageVersion,
+    productName: windowsProductName,
+    windowsReleaseVersion,
     description: pkg.description,
     type: pkg.type,
     main: "dist/desktop/main.js",
@@ -106,10 +112,10 @@ function writeLaunchers() {
   writeFileSync(
     join(stageDir, "README-WINDOWS.txt"),
     [
-      `OpenHarness ${version} Windows desktop bundle`,
+      `${windowsProductName} ${windowsReleaseLabel} desktop bundle`,
       "",
       "Desktop app:",
-      "  .\\OpenHarness.exe",
+      `  .\\${windowsExeName}`,
       "",
       "The desktop app opens a real OpenHarness CLI terminal and a right-side toolbox.",
       "Choose a workspace on first launch. Recent workspaces are stored under Electron userData.",
@@ -117,6 +123,8 @@ function writeLaunchers() {
       "Direct CLI access is still bundled:",
       "  .\\oh.cmd",
       "  .\\oh.cmd --model ollama/qwen3:4b",
+      "",
+      `Bundled CLI runtime version: ${packageVersion}`,
       "",
       "This bundle includes Electron, node.exe, the OpenHarness CLI runtime, and production npm dependencies.",
       "Local Ollama works out of the box when Ollama is running on http://localhost:11434.",
@@ -171,7 +179,7 @@ function rebuildElectronNativeDependencies() {
 function stageElectronRuntime() {
   cpSync(electronDistDir(), stageDir, { recursive: true });
   const electronExe = join(stageDir, "electron.exe");
-  const openHarnessExe = join(stageDir, "OpenHarness.exe");
+  const openHarnessExe = join(stageDir, windowsExeName);
   if (existsSync(openHarnessExe)) rmSync(openHarnessExe, { force: true });
   if (existsSync(electronExe)) {
     rmSync(openHarnessExe, { force: true });

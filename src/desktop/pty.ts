@@ -53,7 +53,7 @@ export function buildDesktopPtyLaunch(input: DesktopPtyLaunchInput): DesktopPtyL
       ...process.env,
       OH_DESKTOP_STATUS_PATH: input.statusPath,
       FORCE_COLOR: process.env.FORCE_COLOR ?? "1",
-      TERM_PROGRAM: "OpenHarness Desktop",
+      TERM_PROGRAM: "OpenHarness for Windows",
       WT_SESSION: process.env.WT_SESSION ?? "openharness-desktop",
     },
     cols: Math.max(20, Math.trunc(input.cols ?? 120)),
