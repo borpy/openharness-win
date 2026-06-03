@@ -19,14 +19,14 @@ function getConfig() {
   };
 }
 
-function getOrCreateTerminal(): vscode.Terminal {
+function getOrCreateTerminal(extensionUri: vscode.Uri): vscode.Terminal {
   if (terminal && terminal.exitStatus === undefined) {
     terminal.show();
     return terminal;
   }
   terminal = vscode.window.createTerminal({
     name: 'OpenHarness',
-    iconPath: new vscode.ThemeIcon('hubot'),
+    iconPath: vscode.Uri.joinPath(extensionUri, 'assets', 'logo-windows-64.png'),
   });
   terminal.show();
   return terminal;
@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('openharness.start', () => {
       const { model, permissionMode } = getConfig();
-      const t = getOrCreateTerminal();
+      const t = getOrCreateTerminal(context.extensionUri);
       t.sendText(`npx openharness --model ${model} --permission-mode ${permissionMode}`);
     })
   );
@@ -53,7 +53,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!prompt) return;
 
       const { model, permissionMode } = getConfig();
-      const t = getOrCreateTerminal();
+      const t = getOrCreateTerminal(context.extensionUri);
       const escaped = prompt.replace(/"/g, '\\"');
       t.sendText(`npx openharness -p "${escaped}" --model ${model} --permission-mode ${permissionMode}`);
     })
@@ -75,7 +75,7 @@ export function activate(context: vscode.ExtensionContext) {
       const lang = editor.document.languageId;
       const { model } = getConfig();
 
-      const t = getOrCreateTerminal();
+      const t = getOrCreateTerminal(context.extensionUri);
       // Write selection to a temp approach — use stdin pipe
       const escaped = selection.replace(/"/g, '\\"').replace(/\n/g, '\\n').slice(0, 5000);
       t.sendText(

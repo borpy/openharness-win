@@ -4,6 +4,7 @@
   "description": "AI coding agent in your editor — works with any LLM",
   "version": "0.1.0",
   "publisher": "zhijiewang",
+  "icon": "assets/logo-windows-128.png",
   "engines": {
     "vscode": "^1.85.0"
   },

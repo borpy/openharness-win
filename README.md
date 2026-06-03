@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo-256.png" alt="openHarness logo" width="128" />
+  <img src="assets/logo-windows-256.png" alt="OpenHarness for Windows logo" width="128" />
 </p>
 
 # OpenHarness for Windows

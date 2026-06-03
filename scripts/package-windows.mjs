@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import rcedit from "rcedit";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const args = new Set(process.argv.slice(2));
@@ -21,6 +22,24 @@ const releaseDir = join(root, "release");
 const stageDir = join(releaseDir, `OpenHarness-for-Windows-${windowsReleaseLabel}-win32-${arch}`);
 const appDir = join(stageDir, "resources", "app");
 const zipPath = `${stageDir}.zip`;
+const windowsIconPath = join(root, "assets", "logo-windows.ico");
+const desktopAssetNames = [
+  "logo.svg",
+  "logo-dark.svg",
+  "logo.ico",
+  "logo-64.png",
+  "logo-256.png",
+  "logo-banner.png",
+  "logo-windows.svg",
+  "logo-windows.ico",
+  "logo-windows-16.png",
+  "logo-windows-32.png",
+  "logo-windows-48.png",
+  "logo-windows-64.png",
+  "logo-windows-128.png",
+  "logo-windows-256.png",
+  "logo-windows-banner.png",
+];
 
 function run(command, commandArgs, options = {}) {
   const useCmdShim = process.platform === "win32" && (command === "npm" || command === "npx");
@@ -91,6 +110,14 @@ function minimalDesktopPackageJson() {
 
 function copyIfExists(source, target) {
   if (existsSync(source)) cpSync(source, target, { recursive: true });
+}
+
+function copyDesktopAssets() {
+  const targetDir = join(appDir, "assets");
+  mkdirSync(targetDir, { recursive: true });
+  for (const assetName of desktopAssetNames) {
+    copyIfExists(join(root, "assets", assetName), join(targetDir, assetName));
+  }
 }
 
 function writeLaunchers() {
@@ -189,7 +216,23 @@ function rebuildElectronNativeDependencies() {
   }
 }
 
-function stageElectronRuntime() {
+async function stampWindowsExecutableIcon(exePath) {
+  if (!existsSync(windowsIconPath)) {
+    throw new Error(`Missing Windows icon: ${windowsIconPath}`);
+  }
+  await rcedit(exePath, {
+    icon: windowsIconPath,
+    "version-string": {
+      CompanyName: "OpenHarness",
+      FileDescription: windowsProductName,
+      InternalName: windowsProductName,
+      OriginalFilename: windowsExeName,
+      ProductName: windowsProductName,
+    },
+  });
+}
+
+async function stageElectronRuntime() {
   cpSync(electronDistDir(), stageDir, { recursive: true });
   const electronExe = join(stageDir, "electron.exe");
   const openHarnessExe = join(stageDir, windowsExeName);
@@ -197,24 +240,17 @@ function stageElectronRuntime() {
   if (existsSync(electronExe)) {
     rmSync(openHarnessExe, { force: true });
     cpSync(electronExe, openHarnessExe);
+    await stampWindowsExecutableIcon(openHarnessExe);
     rmSync(electronExe, { force: true });
   }
 }
 
 function createZip() {
   if (existsSync(zipPath)) rmSync(zipPath, { force: true });
-  run(
-    "powershell.exe",
-    [
-      "-NoProfile",
-      "-Command",
-      "$ErrorActionPreference = 'Stop'; Compress-Archive -LiteralPath $env:OH_STAGE_DIR -DestinationPath $env:OH_ZIP_PATH -Force",
-    ],
-    { env: { OH_STAGE_DIR: stageDir, OH_ZIP_PATH: zipPath } },
-  );
+  run("tar", ["-a", "-cf", zipPath, "-C", releaseDir, basename(stageDir)]);
 }
 
-function main() {
+async function main() {
   requireBuiltArtifacts();
   if (dryRun) {
     console.log(`Windows desktop bundle: ${stageDir}`);
@@ -227,10 +263,11 @@ function main() {
   rmSync(stageDir, { recursive: true, force: true });
   mkdirSync(appDir, { recursive: true });
 
-  stageElectronRuntime();
+  await stageElectronRuntime();
   mkdirSync(appDir, { recursive: true });
   cpSync(join(root, "dist"), join(appDir, "dist"), { recursive: true });
   copyIfExists(join(root, "data"), join(appDir, "data"));
+  copyDesktopAssets();
   copyIfExists(join(root, "README.md"), join(appDir, "README.md"));
   copyIfExists(join(root, "LICENSE"), join(appDir, "LICENSE"));
   copyIfExists(join(root, "package-lock.json"), join(appDir, "package-lock.json"));
@@ -245,4 +282,4 @@ function main() {
   console.log(`Created ${zipPath}`);
 }
 
-main();
+await main();

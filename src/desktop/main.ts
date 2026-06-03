@@ -25,6 +25,7 @@ const preloadPath = join(desktopDistDir, "preload.js");
 const DESKTOP_PRODUCT_NAME = "OpenHarness for Windows";
 const DESKTOP_RELEASE_LABEL = "v1.0";
 const DESKTOP_WINDOW_TITLE = `${DESKTOP_PRODUCT_NAME} ${DESKTOP_RELEASE_LABEL}`;
+const DESKTOP_APP_USER_MODEL_ID = "com.openharness.windows";
 
 let mainWindow: BrowserWindow | null = null;
 let terminal: pty.IPty | null = null;
@@ -34,6 +35,17 @@ let terminalStatusMtime = 0;
 let terminalStatusTimer: NodeJS.Timeout | null = null;
 let lastSnapshot: DesktopStatusSnapshot | undefined;
 let lastPtySize = { cols: 120, rows: 32 };
+
+function desktopIconPath(): string | undefined {
+  return [
+    join(app.getAppPath(), "assets", "logo-windows.ico"),
+    join(app.getAppPath(), "assets", "logo-windows-256.png"),
+    join(process.cwd(), "assets", "logo-windows.ico"),
+    join(process.cwd(), "assets", "logo-windows-256.png"),
+    join(process.cwd(), "assets", "logo.ico"),
+    join(process.cwd(), "assets", "logo-256.png"),
+  ].find((path) => existsSync(path));
+}
 
 function settingsPath(): string {
   return join(app.getPath("userData"), "desktop-settings.json");
@@ -296,8 +308,10 @@ function createWindow(): BrowserWindow {
   nativeTheme.themeSource = "dark";
   const settings = readSettings();
   const bounds = settings.windowBounds ?? { width: 1440, height: 920 };
+  const icon = desktopIconPath();
   const win = new BrowserWindow({
     ...bounds,
+    ...(icon ? { icon } : {}),
     minWidth: 1040,
     minHeight: 680,
     backgroundColor: "#111315",
@@ -329,6 +343,7 @@ function createWindow(): BrowserWindow {
 }
 
 app.setName(DESKTOP_PRODUCT_NAME);
+app.setAppUserModelId(DESKTOP_APP_USER_MODEL_ID);
 
 app.whenReady().then(async () => {
   await rm(statusDir(), { recursive: true, force: true }).catch(() => {});
