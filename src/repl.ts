@@ -16,7 +16,8 @@ import { readClipboardImage } from "./harness/clipboard-image.js";
 import { readOhConfig, writeOhConfig } from "./harness/config.js";
 import { estimateMessageTokens, getContextWarning } from "./harness/context-warning.js";
 import { CostTracker, estimateCost, getContextWindow } from "./harness/cost.js";
-import { createDesktopStatusWriter } from "./harness/desktop-status.js";
+import { createDesktopStatusWriter, type DesktopStatusSnapshot } from "./harness/desktop-status.js";
+import { applyReplModelChange } from "./harness/model-state.js";
 import { formatLivePerformance, PerformanceTracker } from "./harness/performance.js";
 import {
   formatContextDial,
@@ -54,6 +55,7 @@ export type REPLConfig = {
   tools: Tools;
   permissionMode: PermissionMode;
   systemPrompt: string;
+  systemPromptBuilder?: (model: string) => string;
   model?: string;
   initialMessages?: Message[];
   resumeSessionId?: string;
@@ -191,6 +193,26 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   let acIndex = s().acIndex;
   let acTokenStart = s().acTokenStart;
   let acIsPath = s().acIsPath;
+
+  function applyCurrentModel(newModel: string, options: { manualOverride?: boolean } = {}) {
+    const next = applyReplModelChange(
+      {
+        currentModel,
+        sessionModel: session.model,
+        manualModelOverride,
+        systemPrompt: config.systemPrompt,
+      },
+      newModel,
+      {
+        manualOverride: options.manualOverride,
+        systemPromptBuilder: config.systemPromptBuilder,
+      },
+    );
+    currentModel = next.currentModel;
+    session.model = next.sessionModel;
+    manualModelOverride = next.manualModelOverride;
+    config.systemPrompt = next.systemPrompt;
+  }
 
   // Sync store → legacy aliases when store changes (for code that reads locals)
   store.subscribe((state) => {
@@ -333,7 +355,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     });
   }
 
-  function syncRenderer() {
+  function syncRenderer(options: { flushDesktopStatus?: boolean } = {}) {
     syncStore();
     renderer.setMessages(messages);
     renderer.setLoading(loading);
@@ -361,7 +383,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     const ctxStr = formatContextDial(runtimeDials.context);
     const resourcesStr = formatResourceDials(runtimeDials.resources);
     const dialsStr = formatRuntimeDials(runtimeDials);
-    desktopStatusWriter.write({
+    const desktopSnapshot: DesktopStatusSnapshot = {
       version: 1,
       timestamp: Date.now(),
       sessionId: session.id,
@@ -382,7 +404,12 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       runtimeDials,
       performance: performanceSnapshot,
       ...(session.gitBranch ? { gitBranch: session.gitBranch } : {}),
-    });
+    };
+    if (options.flushDesktopStatus) {
+      desktopStatusWriter.flush(desktopSnapshot);
+    } else {
+      desktopStatusWriter.write(desktopSnapshot);
+    }
 
     // Resolution priority: script (audit U-B1) → template → default.
     //
@@ -1145,10 +1172,9 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       syncRenderer();
       return;
     }
+    const shouldFlushDesktopStatus = Boolean(result.newModel);
     if (result.newModel) {
-      currentModel = result.newModel;
-      session.model = result.newModel;
-      manualModelOverride = true;
+      applyCurrentModel(result.newModel, { manualOverride: true });
     }
     if (result.newPermissionMode) {
       config.permissionMode = result.newPermissionMode;
@@ -1171,7 +1197,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     // writes on top of the old live area (banner/companion/input), causing double ❯
     // and ghost artifacts.
     if (result.prompt) renderer.clearLiveArea();
-    syncRenderer();
+    syncRenderer({ flushDesktopStatus: shouldFlushDesktopStatus });
     if (result.handled) return;
     if (result.prompt) await runQuery(result.prompt, queued, healthPrechecked);
   }
@@ -1365,7 +1391,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
           }
 
           case "cost_update":
-            currentModel = event.model;
+            applyCurrentModel(event.model);
             performanceTracker.recordCostUpdate({
               inputTokens: event.inputTokens,
               outputTokens: event.outputTokens,

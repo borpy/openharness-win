@@ -332,7 +332,7 @@ function IconButton({
 }: {
   title: string;
   icon: IconType;
-  onClick: () => void;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
 }) {
   return (
@@ -357,7 +357,7 @@ function CommandButton({
 }: {
   icon: IconType;
   label: string;
-  onClick: () => void;
+  onClick: React.MouseEventHandler<HTMLButtonElement>;
   disabled?: boolean;
 }) {
   return (
@@ -415,7 +415,7 @@ function ToggleRow({
   detail: string;
   checked: boolean;
   disabled?: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: (checked: boolean, target: HTMLElement) => void;
 }) {
   return (
     <label className={`toggle-row ${disabled ? "disabled" : ""}`}>
@@ -423,7 +423,7 @@ function ToggleRow({
         type="checkbox"
         checked={checked}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
+        onChange={(event) => onChange(event.target.checked, event.currentTarget)}
       />
       <span>
         <strong>{label}</strong>
@@ -470,7 +470,13 @@ function useDesktopState() {
   return { appState, setAppState, refreshData, setRefreshData, snapshot, terminalState, setTerminalState, refresh };
 }
 
-function TerminalPane({ terminalState }: { terminalState: DesktopTerminalState | null }) {
+function TerminalPane({
+  terminalState,
+  onFocusReady,
+}: {
+  terminalState: DesktopTerminalState | null;
+  onFocusReady: (focus: (() => void) | null) => void;
+}) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -504,6 +510,7 @@ function TerminalPane({ terminalState }: { terminalState: DesktopTerminalState |
     term.open(containerRef.current);
     terminalRef.current = term;
     fitRef.current = fit;
+    onFocusReady(() => term.focus());
     term.onData((data) => {
       window.openHarnessDesktop.writeInput(data).catch(() => {});
     });
@@ -534,8 +541,9 @@ function TerminalPane({ terminalState }: { terminalState: DesktopTerminalState |
       term.dispose();
       terminalRef.current = null;
       fitRef.current = null;
+      onFocusReady(null);
     };
-  }, []);
+  }, [onFocusReady]);
 
   return (
     <main className="terminal-pane">
@@ -560,6 +568,7 @@ function Toolbox({
   terminalState,
   refresh,
   onState,
+  focusTerminal,
 }: {
   appState: DesktopAppState | null;
   refreshData: DesktopRefreshStatus | null;
@@ -567,6 +576,7 @@ function Toolbox({
   terminalState: DesktopTerminalState | null;
   refresh: () => Promise<DesktopRefreshStatus>;
   onState: (state: DesktopAppState) => void;
+  focusTerminal: () => void;
 }) {
   const [historySearch, setHistorySearch] = useState("");
   const [toolSearch, setToolSearch] = useState("");
@@ -584,13 +594,33 @@ function Toolbox({
   const fileWritesEnabled = ["acceptEdits", "auto", "trust", "bypassPermissions"].includes(permissionMode);
   const persistenceEnabled = snapshot?.taskPersistence ?? true;
 
+  const scheduleFollowUpRefresh = useCallback(() => {
+    window.setTimeout(() => {
+      refresh().catch(() => {});
+    }, 600);
+  }, [refresh]);
+
   const sendCommand = useCallback(
     async (command: string) => {
       setCommandHistory((current) => [command, ...current.filter((item) => item !== command)].slice(0, 8));
       await window.openHarnessDesktop.sendCommand(command);
       await refresh();
+      scheduleFollowUpRefresh();
     },
-    [refresh],
+    [refresh, scheduleFollowUpRefresh],
+  );
+
+  const runSidebarAction = useCallback(
+    (action: () => Promise<unknown> | unknown, target?: HTMLElement | null) => {
+      target?.blur();
+      Promise.resolve()
+        .then(action)
+        .catch((error) => console.error("Sidebar action failed", error))
+        .finally(() => {
+          window.requestAnimationFrame(() => focusTerminal());
+        });
+    },
+    [focusTerminal],
   );
 
   const pickWorkspace = async () => {
@@ -638,7 +668,7 @@ function Toolbox({
         <button
           type="button"
           className="collapse-rail"
-          onClick={() => setCollapsed(false)}
+          onClick={(event) => runSidebarAction(() => setCollapsed(false), event.currentTarget)}
           title="Open toolbox"
           aria-label="Open toolbox"
         >
@@ -656,13 +686,23 @@ function Toolbox({
           <div className="eyebrow">Desktop Control</div>
           <strong>Session Toolbox</strong>
         </div>
-        <IconButton title="Collapse toolbox" icon={PanelRightClose} onClick={() => setCollapsed(true)} />
+        <IconButton
+          title="Collapse toolbox"
+          icon={PanelRightClose}
+          onClick={(event) => runSidebarAction(() => setCollapsed(true), event.currentTarget)}
+        />
       </div>
 
       <Section
         title="Workspace"
         icon={FolderOpen}
-        actions={<IconButton title="Change workspace" icon={FolderOpen} onClick={pickWorkspace} />}
+        actions={
+          <IconButton
+            title="Change workspace"
+            icon={FolderOpen}
+            onClick={(event) => runSidebarAction(pickWorkspace, event.currentTarget)}
+          />
+        }
       >
         <div className="workspace-label" title={workspace}>
           {shortPath(workspace)}
@@ -681,11 +721,16 @@ function Toolbox({
           )}
         </div>
         <div className="button-grid two">
-          <CommandButton icon={Plus} label="New Chat" onClick={newChat} disabled={!workspace || busy} />
+          <CommandButton
+            icon={Plus}
+            label="New Chat"
+            onClick={(event) => runSidebarAction(newChat, event.currentTarget)}
+            disabled={!workspace || busy}
+          />
           <CommandButton
             icon={RotateCw}
             label="Resume"
-            onClick={() => sendCommand("/resume")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/resume"), event.currentTarget)}
             disabled={!terminalRunning}
           />
         </div>
@@ -694,7 +739,13 @@ function Toolbox({
       <Section
         title="Run State"
         icon={Activity}
-        actions={<IconButton title="Refresh state" icon={RefreshCw} onClick={() => refresh()} />}
+        actions={
+          <IconButton
+            title="Refresh state"
+            icon={RefreshCw}
+            onClick={(event) => runSidebarAction(() => refresh(), event.currentTarget)}
+          />
+        }
       >
         <div className="row wrap">
           <Pill
@@ -714,27 +765,31 @@ function Toolbox({
             detail={fileWritesEnabled ? "Write/Edit auto-approved" : "Ask before file writes"}
             checked={fileWritesEnabled}
             disabled={!terminalRunning}
-            onChange={(checked) => sendCommand(checked ? "/permissions acceptEdits" : "/permissions ask")}
+            onChange={(checked, target) =>
+              runSidebarAction(() => sendCommand(checked ? "/permissions acceptEdits" : "/permissions ask"), target)
+            }
           />
           <ToggleRow
             label="Persist"
             detail={persistenceEnabled ? "Carry on through chained steps" : "Single response mode"}
             checked={persistenceEnabled}
             disabled={!terminalRunning}
-            onChange={(checked) => sendCommand(checked ? "/persist on" : "/persist off")}
+            onChange={(checked, target) =>
+              runSidebarAction(() => sendCommand(checked ? "/persist on" : "/persist off"), target)
+            }
           />
         </div>
         <div className="button-grid two">
           <CommandButton
             icon={Square}
             label="Stop"
-            onClick={() => window.openHarnessDesktop.interrupt()}
+            onClick={(event) => runSidebarAction(() => window.openHarnessDesktop.interrupt(), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={ListChecks}
             label="Queue"
-            onClick={() => sendCommand("/queue")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/queue"), event.currentTarget)}
             disabled={!terminalRunning}
           />
         </div>
@@ -788,7 +843,13 @@ function Toolbox({
       <Section
         title="Ollama"
         icon={Cpu}
-        actions={<IconButton title="Refresh Ollama" icon={RefreshCw} onClick={() => refresh()} />}
+        actions={
+          <IconButton
+            title="Refresh Ollama"
+            icon={RefreshCw}
+            onClick={(event) => runSidebarAction(() => refresh(), event.currentTarget)}
+          />
+        }
       >
         <div className="row wrap">
           <Pill label={ollama?.alive ? "online" : "offline"} tone={ollama?.alive ? "good" : "bad"} />
@@ -800,7 +861,10 @@ function Toolbox({
         <select
           className="select"
           value={ollama?.currentModel ?? ""}
-          onChange={(event) => sendCommand(`/ollama switch ${event.target.value}`)}
+          onChange={(event) => {
+            const model = event.currentTarget.value;
+            runSidebarAction(() => sendCommand(`/ollama switch ${model}`), event.currentTarget);
+          }}
           disabled={!terminalRunning || !ollama?.models.length}
         >
           {(ollama?.models.length ? ollama.models : [{ name: ollama?.preferredModel ?? "qwen3:4b" }]).map((model) => (
@@ -822,35 +886,41 @@ function Toolbox({
             <CommandButton
               icon={Play}
               label="Start"
-              onClick={async () => {
-                await window.openHarnessDesktop.startOllamaServer();
-                await refresh();
-              }}
+              onClick={(event) =>
+                runSidebarAction(async () => {
+                  await window.openHarnessDesktop.startOllamaServer();
+                  await refresh();
+                }, event.currentTarget)
+              }
               disabled={!ollama?.startable}
             />
           ) : null}
           <CommandButton
             icon={RefreshCw}
             label="Panel"
-            onClick={() => sendCommand("/ollama refresh")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/ollama refresh"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={Activity}
             label="Poll"
-            onClick={() => sendCommand("/ollama poll 5 1000")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/ollama poll 5 1000"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={Play}
             label="Diagnose"
-            onClick={() => sendCommand(`/ollama diagnose ${ollama?.currentModel ?? ""}`)}
+            onClick={(event) =>
+              runSidebarAction(() => sendCommand(`/ollama diagnose ${ollama?.currentModel ?? ""}`), event.currentTarget)
+            }
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={Upload}
             label="Pull"
-            onClick={() => window.openHarnessDesktop.pullDefaultOllamaModel()}
+            onClick={(event) =>
+              runSidebarAction(() => window.openHarnessDesktop.pullDefaultOllamaModel(), event.currentTarget)
+            }
             disabled={!terminalRunning}
           />
         </div>
@@ -874,32 +944,37 @@ function Toolbox({
           <CommandButton
             icon={Activity}
             label="Status"
-            onClick={() => sendCommand("/github status")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/github status"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={FileDiff}
             label="Diff"
-            onClick={() => sendCommand("/diff")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/diff"), event.currentTarget)}
             disabled={!terminalRunning}
           />
-          <CommandButton icon={Upload} label="Push" onClick={() => sendCommand("/push")} disabled={!terminalRunning} />
+          <CommandButton
+            icon={Upload}
+            label="Push"
+            onClick={(event) => runSidebarAction(() => sendCommand("/push"), event.currentTarget)}
+            disabled={!terminalRunning}
+          />
           <CommandButton
             icon={Eye}
             label="PR View"
-            onClick={() => sendCommand("/pr view")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/pr view"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={GitPullRequest}
             label="PR Create"
-            onClick={() => sendCommand("/pr create")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/pr create"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={Clipboard}
             label="Paste Image"
-            onClick={() => sendCommand("/paste-image")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/paste-image"), event.currentTarget)}
             disabled={!terminalRunning}
           />
         </div>
@@ -933,26 +1008,31 @@ function Toolbox({
           <CommandButton
             icon={Wrench}
             label="Tools"
-            onClick={() => sendCommand("/tools")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/tools"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={Activity}
             label="Status"
-            onClick={() => sendCommand("/status")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/status"), event.currentTarget)}
             disabled={!terminalRunning}
           />
           <CommandButton
             icon={PanelRightClose}
             label="Compact"
-            onClick={() => sendCommand("/compact")}
+            onClick={(event) => runSidebarAction(() => sendCommand("/compact"), event.currentTarget)}
             disabled={!terminalRunning}
           />
         </div>
         {commandHistory.length ? (
           <div className="recent-commands">
             {commandHistory.slice(0, 4).map((command) => (
-              <button type="button" key={command} onClick={() => sendCommand(command)} title={command}>
+              <button
+                type="button"
+                key={command}
+                onClick={(event) => runSidebarAction(() => sendCommand(command), event.currentTarget)}
+                title={command}
+              >
                 {command}
               </button>
             ))}
@@ -976,7 +1056,9 @@ function Toolbox({
                 type="button"
                 className="session-row"
                 key={session.id}
-                onClick={() => window.openHarnessDesktop.resumeSession(session.id)}
+                onClick={(event) =>
+                  runSidebarAction(() => window.openHarnessDesktop.resumeSession(session.id), event.currentTarget)
+                }
                 title={`Resume ${session.id}`}
               >
                 <span>
@@ -997,6 +1079,15 @@ function Toolbox({
 
 function App() {
   const { appState, setAppState, refreshData, setRefreshData, snapshot, terminalState, refresh } = useDesktopState();
+  const terminalFocusRef = useRef<(() => void) | null>(null);
+
+  const registerTerminalFocus = useCallback((focus: (() => void) | null) => {
+    terminalFocusRef.current = focus;
+  }, []);
+
+  const focusTerminal = useCallback(() => {
+    terminalFocusRef.current?.();
+  }, []);
 
   const handleState = (state: DesktopAppState) => {
     setAppState(state);
@@ -1047,7 +1138,7 @@ function App() {
         </div>
       </header>
       <div className="content-grid">
-        <TerminalPane terminalState={terminalState} />
+        <TerminalPane terminalState={terminalState} onFocusReady={registerTerminalFocus} />
         <Toolbox
           appState={appState}
           refreshData={refreshData}
@@ -1055,6 +1146,7 @@ function App() {
           terminalState={terminalState}
           refresh={refresh}
           onState={handleState}
+          focusTerminal={focusTerminal}
         />
       </div>
     </div>
