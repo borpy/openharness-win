@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../../Tool.js";
 import { safeEnv } from "../../utils/safe-env.js";
+import { killProcess } from "../../utils/kill-process.js";
 
 const inputSchema = z.object({
   command: z.string().describe("Background command to watch"),
@@ -43,6 +44,7 @@ export const MonitorTool: Tool<typeof inputSchema> = {
       const timer = setTimeout(() => {
         if (!settled) {
           settled = true;
+          killProcess(proc.pid, context.workingDir);
           proc.kill();
           resolve({
             output:

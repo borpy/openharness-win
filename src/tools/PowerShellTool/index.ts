@@ -2,6 +2,7 @@ import { spawn, type SpawnOptions } from "node:child_process";
 import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../../Tool.js";
 import { safeEnv } from "../../utils/safe-env.js";
+import { killProcess } from "../../utils/kill-process.js";
 
 const inputSchema = z.object({
   command: z.string().describe("PowerShell command to execute"),
@@ -52,16 +53,7 @@ export const PowerShellTool: Tool<typeof inputSchema> = {
       const proc = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", input.command], spawnOpts);
 
       const timer = setTimeout(() => {
-        // Forceful kill on Windows for the common case of a hanging registry/COM call.
-        try {
-          if (proc.pid) {
-            // taskkill is the reliable way to reap the whole tree on win.
-            const { spawnSync } = require("node:child_process");
-            spawnSync("taskkill", ["/pid", String(proc.pid), "/f", "/t"], { windowsHide: true });
-          }
-        } catch {
-          /* best effort */
-        }
+        killProcess(proc.pid, context.workingDir);
         proc.kill();
       }, timeoutMs);
 
@@ -83,14 +75,7 @@ export const PowerShellTool: Tool<typeof inputSchema> = {
 
       if (context.abortSignal) {
         context.abortSignal.addEventListener("abort", () => {
-          try {
-            if (proc.pid) {
-              const { spawnSync } = require("node:child_process");
-              spawnSync("taskkill", ["/pid", String(proc.pid), "/f", "/t"], { windowsHide: true });
-            }
-          } catch {
-            /* best effort */
-          }
+          killProcess(proc.pid, context.workingDir);
           proc.kill();
         });
       }
