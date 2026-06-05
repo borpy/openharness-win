@@ -4,9 +4,11 @@
  */
 
 import type { z } from "zod";
+
 import type { Provider } from "./providers/base.js";
 import type { ToolCallComplete, ToolCallEnd, ToolCallStart, ToolOutputDelta } from "./types/events.js";
 import type { PermissionMode, RiskLevel } from "./types/permissions.js";
+
 import { zodToJsonSchemaSimple as zodToJsonSchema } from "./mcp/schema.js";
 
 export type ToolResult = {
