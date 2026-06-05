@@ -7,6 +7,7 @@ import type { z } from "zod";
 import type { Provider } from "./providers/base.js";
 import type { ToolCallComplete, ToolCallEnd, ToolCallStart, ToolOutputDelta } from "./types/events.js";
 import type { PermissionMode, RiskLevel } from "./types/permissions.js";
+import { zodToJsonSchemaSimple as zodToJsonSchema } from "./mcp/schema.js";
 
 export type ToolResult = {
   output: string;
@@ -78,53 +79,6 @@ export function toolToAPIFormat(tool: Tool): {
       parameters: zodToJsonSchema(tool.inputSchema),
     },
   };
-}
-
-/**
- * Simple Zod-to-JSON-Schema converter for tool parameters.
- * Handles the common cases (object, string, number, boolean, optional).
- */
-function zodToJsonSchema(schema: z.ZodType): unknown {
-  // Zod provides .description and ._def for introspection
-  const def = (schema as any)._def;
-
-  if (def?.typeName === "ZodObject") {
-    const shape = (schema as z.ZodObject<any>).shape;
-    const properties: Record<string, unknown> = {};
-    const required: string[] = [];
-
-    for (const [key, value] of Object.entries(shape)) {
-      const field = value as z.ZodType;
-      const fieldDef = (field as any)._def;
-
-      if (fieldDef?.typeName === "ZodOptional") {
-        properties[key] = zodToJsonSchema(fieldDef.innerType);
-      } else {
-        properties[key] = zodToJsonSchema(field);
-        required.push(key);
-      }
-
-      // Add description if present
-      if ((field as any).description) {
-        (properties[key] as any).description = (field as any).description;
-      }
-    }
-
-    return { type: "object", properties, required };
-  }
-
-  if (def?.typeName === "ZodString") return { type: "string" };
-  if (def?.typeName === "ZodNumber") return { type: "number" };
-  if (def?.typeName === "ZodBoolean") return { type: "boolean" };
-  if (def?.typeName === "ZodArray") return { type: "array", items: zodToJsonSchema(def.type) };
-  // ZodRecord (used by DeferredTool's permissive schema) → permissive object.
-  // Anthropic's tool-use API requires `type: "object"` for tool input_schema.
-  if (def?.typeName === "ZodRecord") return { type: "object", additionalProperties: {} };
-  if (def?.typeName === "ZodUnknown" || def?.typeName === "ZodAny") return {};
-
-  // Fallback: return permissive object so tool-use APIs that require object
-  // input schemas (Anthropic) don't reject the request.
-  return { type: "object", additionalProperties: {} };
 }
 
 /**
