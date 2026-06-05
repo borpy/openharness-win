@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { z } from "zod";
 import type { Tool, ToolContext, ToolResult } from "../../Tool.js";
+import { safeEnv } from "../../utils/safe-env.js";
 
 const inputSchema = z.object({
   command: z.string().describe("Background command to watch"),
@@ -32,7 +33,9 @@ export const MonitorTool: Tool<typeof inputSchema> = {
       let settled = false;
 
       const proc = spawn(input.command, {
-        shell: true,
+        cwd: context.workingDir,
+        env: safeEnv({}), // at least don't leak full process env for agent work
+        shell: true, // documented: full shell expression allowed for complex | && monitoring
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       });
