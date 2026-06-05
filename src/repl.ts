@@ -75,9 +75,10 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
   // Session
   let session: Session;
+  const cwd = (config as any).workingDir ?? process.cwd();
   const sessionExtras = {
-    workingDir: process.cwd(),
-    gitBranch: isGitRepo() ? (await import("./git/index.js")).gitBranch() : undefined,
+    workingDir: cwd,
+    gitBranch: isGitRepo(cwd) ? (await import("./git/index.js")).gitBranch(cwd) : undefined,
     tools: config.tools.map((t) => t.name),
   };
   try {
