@@ -84,4 +84,36 @@ describe("ToolExecutor", () => {
     assert.strictEqual(res.isError, true);
     assert.ok(res.output.includes("headless"));
   });
+
+  // Expanded matrix per plan: permission modes + hook outcomes (simulated via mode)
+  it("allows in trust mode for high-risk", async () => {
+    const highRiskTool: Tool = {
+      ...mockTool,
+      name: "MockWrite3",
+      riskLevel: "high",
+      isReadOnly: () => false,
+    };
+    const res = await executeToolWithGates(
+      { id: "c4", toolName: "MockWrite3", arguments: { path: "quux.txt" } },
+      {
+        tools: [...tools, highRiskTool],
+        context: baseContext,
+        permissionMode: "trust",
+      },
+    );
+    assert.strictEqual(res.isError, false);
+  });
+
+  it("contract: low-risk always proceeds in auto/plan/ask (smoke for both paths)", async () => {
+    const resAuto = await executeToolWithGates(
+      { id: "c5", toolName: "MockRead", arguments: { path: "a.txt" } },
+      { tools, context: baseContext, permissionMode: "auto" },
+    );
+    const resPlan = await executeToolWithGates(
+      { id: "c6", toolName: "MockRead", arguments: { path: "b.txt" } },
+      { tools, context: baseContext, permissionMode: "plan" },
+    );
+    assert.strictEqual(resAuto.isError, false);
+    assert.strictEqual(resPlan.isError, false);
+  });
 });

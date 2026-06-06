@@ -132,3 +132,15 @@ export function _resetDebugForTest(): void {
   sinkOverride = undefined;
   started = Date.now();
 }
+
+/**
+ * Report a swallowed error (for resilience paths that catch {} or .catch(() => {})).
+ * Logs to debug if the category is enabled (use OH_DEBUG or --debug), otherwise silent.
+ * Helps with #10 without changing resilience behavior.
+ */
+export function reportSwallowed(err: unknown, context: string, category = "error"): void {
+  if (isDebugEnabled(category)) {
+    debug(category, `swallowed in ${context}:`, err);
+  }
+  // Could also emit to tracer here in future if context has one.
+}

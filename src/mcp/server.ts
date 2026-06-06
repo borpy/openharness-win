@@ -8,10 +8,17 @@
  * OpenHarness's tools (Bash, Read, Write, Edit, Glob, Grep, etc.)
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import type { ToolContext, Tools } from "../Tool.js";
 import { McpServer as SdkMcpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { zodToJsonSchemaSimple } from "./schema.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "../../package.json"), "utf-8"));
+const serverVersion = pkg.version ?? "0.0.0";
 
 export class McpServer {
   private tools: Tools;
@@ -27,7 +34,7 @@ export class McpServer {
   start(): void {
     const sdk = new SdkMcpServer({
       name: "openharness",
-      version: "2.47.0", // TODO: source from package.json like in packaging
+      version: serverVersion, // MCP spec snapshot; see SDK for current protocol details
     });
 
     // Register all tools with the SDK (inputSchema via our wrapper for now)

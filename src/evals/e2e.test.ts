@@ -9,7 +9,9 @@ import { loadPack } from "./pack-loader.js";
 
 // e2e tests use POSIX oracle.sh; Windows is exercised via orchestrator.test.ts unit tests.
 // TODO (2026-06 audit, plan Group D): add Windows-compatible oracles (cmd/ps1) so E2E can run on win32.
+// Added placeholders: test/fixtures/win-oracle.cmd and .ps1 (adapt per pack oracle.sh).
 // For now keep skip on win to avoid sh fixture issues; synthetic pack is posix-heavy.
+// When oracles ready, unskip and use e.g. OH_EVAL_ORACLE=win-oracle.cmd or platform conditional.
 const SKIP_E2E = process.platform === "win32";
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -47,6 +47,7 @@ import { fuzzyFilter } from "./utils/fuzzy.js";
 import { createImageContextContent } from "./utils/image-context.js";
 import { setActiveTheme } from "./utils/theme-data.js";
 import { formatToolArgs, summarizeToolOutput } from "./utils/tool-summary.js";
+import { reportSwallowed } from "./utils/debug.js";
 
 /** Per-call cap on rendered tool output in renderer state. Sized to fit typical JSON/markdown files (16 KiB) so JSON.parse / markdown detection works on real content; larger outputs render truncated. */
 const TOOL_OUTPUT_RENDER_CAP = 16384;
@@ -85,7 +86,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     session = config.resumeSessionId
       ? loadSession(config.resumeSessionId)
       : createSession(config.provider.name, config.model ?? "", sessionExtras);
-  } catch {
+  } catch (err) {
+    reportSwallowed(err, "session create fallback");
     session = createSession(config.provider.name, config.model ?? "", sessionExtras);
   }
 
@@ -428,7 +430,8 @@ export async function startREPL(config: REPLConfig): Promise<void> {
         scriptLine = null; // untrusted — silently skip; user can /trust
       } else {
         const ctxPct = runtimeDials.context.percent;
-        scriptLine = runStatusLineScript(
+        // Fire async (plan #13 best-effort non-blocking) to avoid blocking render.
+        runStatusLineScript(
           {
             model: currentModel || "",
             tokens: { input: inTok, output: outTok },
@@ -441,12 +444,13 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             gitBranch: session.gitBranch,
           },
           sl,
-        );
+        ).then((line) => {
+          if (line !== null) renderer.setStatusLine(line);
+        }).catch((e) => reportSwallowed(e, "status-line async", "status"));
       }
     }
-    if (scriptLine !== null) {
-      renderer.setStatusLine(scriptLine);
-    } else if (cachedConfig?.statusLineFormat) {
+    // scriptLine now handled async above for non-blocking; fall to format if no script.
+    if (cachedConfig?.statusLineFormat) {
       const line = cachedConfig.statusLineFormat
         .replace("{model}", currentModel || "")
         .replace("{tokens}", tokensStr)
