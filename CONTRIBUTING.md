@@ -27,7 +27,9 @@ npm run test:sdk     # SDK workspace tests only
 npm run build        # tsc → dist/
 ```
 
-CI runs `typecheck`, `lint`, and `test` on Ubuntu and Windows. All must pass before merge.
+CI runs `lint`, `typecheck`, and `test` on Ubuntu and Windows (see .github/workflows/ci.yml and the publish workflows). All must pass before merge.
+
+**Windows packaging** (`npm run package:windows`) **must be run on Windows** (or a Windows GitHub runner). It bundles the *current* `node.exe` + matching `node*.dll`s (see `scripts/package-windows.mjs:178` which throws on non-win32, and `copyNodeRuntime`). Use `--dry-run` on other OSes to validate the script without the native bundle step. See `docs/windows.md` for details (updated in the 2026-06 audit).
 
 ## Project Structure
 

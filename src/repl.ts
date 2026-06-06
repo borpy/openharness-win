@@ -47,6 +47,7 @@ import { fuzzyFilter } from "./utils/fuzzy.js";
 import { createImageContextContent } from "./utils/image-context.js";
 import { setActiveTheme } from "./utils/theme-data.js";
 import { formatToolArgs, summarizeToolOutput } from "./utils/tool-summary.js";
+import { reportSwallowed } from "./utils/debug.js";
 
 /** Per-call cap on rendered tool output in renderer state. Sized to fit typical JSON/markdown files (16 KiB) so JSON.parse / markdown detection works on real content; larger outputs render truncated. */
 const TOOL_OUTPUT_RENDER_CAP = 16384;
@@ -75,16 +76,18 @@ export async function startREPL(config: REPLConfig): Promise<void> {
 
   // Session
   let session: Session;
+  const cwd = (config as any).workingDir ?? process.cwd();
   const sessionExtras = {
-    workingDir: process.cwd(),
-    gitBranch: isGitRepo() ? (await import("./git/index.js")).gitBranch() : undefined,
+    workingDir: cwd,
+    gitBranch: isGitRepo(cwd) ? (await import("./git/index.js")).gitBranch(cwd) : undefined,
     tools: config.tools.map((t) => t.name),
   };
   try {
     session = config.resumeSessionId
       ? loadSession(config.resumeSessionId)
       : createSession(config.provider.name, config.model ?? "", sessionExtras);
-  } catch {
+  } catch (err) {
+    reportSwallowed(err, "session create fallback");
     session = createSession(config.provider.name, config.model ?? "", sessionExtras);
   }
 
@@ -387,7 +390,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       version: 1,
       timestamp: Date.now(),
       sessionId: session.id,
-      cwd: process.cwd(),
+      cwd: cwd,
       model: currentModel || config.model || "",
       providerName: config.provider.name,
       permissionMode: config.permissionMode,
@@ -422,12 +425,13 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     let scriptLine: string | null = null;
     const sl = cachedConfig?.statusLine;
     if (sl?.command) {
-      const cwd = process.cwd();
+      const cwd = (config as any).workingDir ?? process.cwd();
       if (trustSystemActive() && !isTrusted(cwd)) {
         scriptLine = null; // untrusted — silently skip; user can /trust
       } else {
         const ctxPct = runtimeDials.context.percent;
-        scriptLine = runStatusLineScript(
+        // Fire async (plan #13 best-effort non-blocking) to avoid blocking render.
+        runStatusLineScript(
           {
             model: currentModel || "",
             tokens: { input: inTok, output: outTok },
@@ -440,12 +444,13 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             gitBranch: session.gitBranch,
           },
           sl,
-        );
+        ).then((line) => {
+          if (line !== null) renderer.setStatusLine(line);
+        }).catch((e) => reportSwallowed(e, "status-line async", "status"));
       }
     }
-    if (scriptLine !== null) {
-      renderer.setStatusLine(scriptLine);
-    } else if (cachedConfig?.statusLineFormat) {
+    // scriptLine now handled async above for non-blocking; fall to format if no script.
+    if (cachedConfig?.statusLineFormat) {
       const line = cachedConfig.statusLineFormat
         .replace("{model}", currentModel || "")
         .replace("{tokens}", tokensStr)
@@ -1365,7 +1370,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             if (!event.isError && isGitRepo()) {
               const rawArgs = prevTc?.args ?? "";
               const filePath = rawArgs.startsWith("$") ? null : rawArgs;
-              const hash = autoCommitAIEdits(toolName, filePath ? [filePath] : [], process.cwd());
+              const hash = autoCommitAIEdits(toolName, filePath ? [filePath] : [], cwd);
               if (hash) {
                 // Show changed files in commit message
                 let commitMsg = `git: committed ${hash}`;
@@ -1547,7 +1552,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   void (async () => {
     try {
       const { isTrusted, trust } = await import("./harness/trust.js");
-      if (isTrusted(process.cwd())) return;
+      if (isTrusted(cwd)) return;
       const cfgWithHooks = readOhConfig();
       const hooks = cfgWithHooks?.hooks;
       if (!hooks) return;
@@ -1556,7 +1561,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       );
       if (!hasShellHook) return;
       const answer = await renderer.askQuestion(
-        `Trust this workspace? Shell hooks are configured in ${process.cwd()}. (yes/no)`,
+        `Trust this workspace? Shell hooks are configured in ${cwd}. (yes/no)`,
       );
       if (answer.toLowerCase().startsWith("y")) {
         trust(process.cwd());

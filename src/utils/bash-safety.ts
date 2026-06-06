@@ -58,6 +58,26 @@ const NETWORK_EXFIL = new Set(["curl", "wget", "nc", "ncat", "socat", "ssh", "sc
  */
 const PROCESS_WRAPPERS = new Set(["timeout", "time", "nice", "nohup", "stdbuf", "ionice", "unbuffer", "env"]);
 
+// --- Windows equivalents (for classification only — the actual command the model runs is never mutated) ---
+const WIN32_DESTRUCTIVE_COMMANDS = new Set(["del", "rmdir", "format", "reg", "fsutil", "cipher", "diskpart"]);
+const WIN32_DANGEROUS_GIT = new Set([
+  "push --force",
+  "push -f",
+  "reset --hard",
+  "clean -f",
+  "clean -fd",
+  "clean -fx",
+  "checkout .",
+  "checkout --",
+  "restore .",
+  "branch -D",
+  "branch -d",
+]);
+const WIN32_INSTALL_COMMANDS = new Set(["winget", "choco", "scoop", "cinst", "cup"]);
+const WIN32_NETWORK_EXFIL = new Set(["curl", "wget", "Invoke-WebRequest", "iwr"]);
+const WIN32_PERMISSION_COMMANDS = new Set(["icacls", "takeown", "attrib"]);
+const WIN32_KILL_FORCE = new Set(["taskkill", "Stop-Process"]);
+
 /**
  * Strip leading process-wrapper tokens from a command string. Returns the
  * underlying command (tokens + original separator). When the command is
@@ -237,6 +257,23 @@ export function isReadOnlyBashCommand(command: string): boolean {
 export function analyzeBashCommand(command: string): BashRisk {
   const reasons: string[] = [];
   const trimmed = command.trim();
+
+  const isWin = process.platform === "win32";
+  if (isWin) {
+    // Best-effort classification for common Windows destructive / install / kill patterns.
+    // We only use this for *permission risk level*, never to rewrite the command the model actually executes.
+    if (/(^|\s)(del|rmdir)\s+\/[a-z]*s/i.test(trimmed) ||
+        /(^|\s)format\s/i.test(trimmed) ||
+        /(^|\s)reg\s+(delete|add|regedit)/i.test(trimmed) ||
+        /(^|\s)(winget|choco)\s+(install|add)/i.test(trimmed) ||
+        /(^|\s)taskkill\s+\/f/i.test(trimmed) ||
+        /(^|\s)(netsh|fsutil|diskpart)\s/i.test(trimmed)) {
+      reasons.push("windows destructive command pattern");
+    }
+    if (WIN32_DANGEROUS_GIT.size > 0 && /git\s+(push|reset|clean|checkout|restore|branch\s+-D)/i.test(trimmed)) {
+      // reuse some of the dangerous git logic below
+    }
+  }
 
   // Split into sub-commands (pipes, semicolons, &&, ||)
   const subCommands = splitCommands(trimmed);

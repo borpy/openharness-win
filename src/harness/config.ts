@@ -12,6 +12,16 @@ export type McpCommonConfig = {
   name: string;
   riskLevel?: "low" | "medium" | "high";
   timeout?: number; // ms, default 5000
+  /**
+   * Per-tool overrides for risk/readonly/concurrency (for MCP servers that expose tools).
+   * Keyed by the tool's name from tools/list.
+   * Allows e.g. marking read_file as low-risk readonly even if server default is medium.
+   */
+  tools?: Record<string, {
+    riskLevel?: "low" | "medium" | "high";
+    isReadOnly?: boolean;
+    isConcurrencySafe?: boolean;
+  }>;
 };
 
 export type McpStdioConfig = McpCommonConfig & {

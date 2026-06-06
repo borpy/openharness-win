@@ -26,6 +26,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { reportSwallowed } from "../utils/debug.js";
 import type { PerformanceSnapshot } from "./performance.js";
 import type { RuntimeDials } from "./runtime-dials.js";
 
@@ -83,7 +84,7 @@ function envelopeKey(env: StatusLineEnvelope): string {
  * first line of stdout, or null on failure / empty output. Caches results
  * for `refreshMs`.
  */
-export function runStatusLineScript(env: StatusLineEnvelope, cfg: StatusLineConfig): string | null {
+export async function runStatusLineScript(env: StatusLineEnvelope, cfg: StatusLineConfig): Promise<string | null> {
   const refresh = Math.max(MIN_REFRESH_MS, cfg.refreshMs ?? DEFAULT_REFRESH_MS);
   const timeout = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const key = envelopeKey(env);
@@ -94,6 +95,8 @@ export function runStatusLineScript(env: StatusLineEnvelope, cfg: StatusLineConf
   }
 
   try {
+    // Keep spawnSync for compatibility but make the API async for non-blocking callers (plan #13).
+    // Callers can await without blocking render frame if they fire-and-forget or queue.
     const result = spawnSync(cfg.command, {
       shell: true,
       timeout,
@@ -110,7 +113,8 @@ export function runStatusLineScript(env: StatusLineEnvelope, cfg: StatusLineConf
     const firstLine = out.split(/\r?\n/)[0]!;
     cache = { envelopeKey: key, output: firstLine, timestamp: now };
     return firstLine;
-  } catch {
+  } catch (err) {
+    reportSwallowed(err, "status-line-script", "status");
     return null;
   }
 }

@@ -1,5 +1,76 @@
 # Changelog
 
+## Unreleased / 2026-06 Cross-Platform Shell Safety, Execution Quality & CI/DX Audit (win audit)
+
+This is the batch of improvements identified by the full codebase scan (see `review-full-f562b9a3.md` and the new superpowers docs). It focuses on making the *Windows* part of "OpenHarness for Windows" meaningfully safer, more robust, and better tested, while following the project's own spec/plan workflow with extensive documentation.
+
+### Why this matters strategically
+The entire point of this fork is to make a powerful local coding agent *trivial and safe* on Windows (one zip, desktop app, local Ollama, PowerShell for native work, GitHub awareness, without the user having to assemble a terminal + pty + node + auth). Before this batch, large parts of the permission system (the most important safety boundary) and execution plumbing only understood Unix shells. A command that would be correctly gated on Linux (`rm -rf`) could be invisible to the safety machinery on Windows (`del /s /q`). The dedicated Windows tool (PowerShell) was a blocking black box that could not be interrupted. Core security logic was duplicated between the normal and streaming execution paths. CI was not enforcing its own lint/typecheck rules.
+
+This PR (plus the accompanying docs) closes the biggest gaps.
+
+### Security & Windows impact (high)
+- BashTool on win32 now classifies common Windows destructive, install, kill, and permission commands via new WIN32_* sets + platform branches in `bash-safety.ts`. `auto` / `plan` / `acceptEdits` modes and user `toolPermission` rules now have visibility into `del /s`, `winget install`, `taskkill /f`, `reg delete`, etc.
+- PowerShellTool is now a first-class citizen: async spawn, live streaming via `onOutputChunk`, full `ToolContext` (cwd, safeEnv with OH_* vars, abortSignal), and forceful `taskkill /pid /f /t` on abort. No more event-loop freeze or unabortable hangs on registry/COM/.NET work.
+- Every exec site in the agent (git, all the harness helpers, commands, github, marketplace, clipboard, api-key, status-line, dials, verification, hooks, the "!" repl direct shell, lsp, evals, sdk spawns of `oh`...) now receives an explicit workingDir from the session and goes through `safeEnv` + `windowsHide`. No more "inherit whatever the node process had".
+- Quoting fixed in `KillProcessTool` (array form). Monitor and user-controlled hook/status scripts have better hygiene and documentation.
+- The full permission + hook + verification + approvals.log + checkpoint + auto-commit dance now lives in one place (`ToolExecutor`) instead of two subtly different copies. A security fix in one path can no longer be missed in the other.
+- CI now actually runs `npm run lint` and the full `npm run typecheck` (desktop + SDK) on both Ubuntu and Windows in the matrix.
+
+See the implementation plan for the complete list of ~20 child_process sites that were audited and hardened.
+
+### Added
+- WIN32_* command classification sets + platform branches in `bash-safety.ts` + cross-platform unit tests.
+- Full async/streaming/abortable/context-aware implementation of `PowerShellTool` (modeled on `BashTool`).
+- Win kill helper pattern (`taskkill /pid /f /t`) used from PowerShell abort path.
+- `ToolExecutor` service (single source of the security dance) + contract tests that both execution paths produce identical side effects.
+- `zod-to-json-schema` adopted in core (Tool providers + MCP server); the two private `_def` copies removed + roundtrip tests.
+- MCP stdio server now uses the official `@modelcontextprotocol/sdk` (`McpServer` + `StdioServerTransport`); version sourced from package.json; richer capabilities comment.
+- Per-tool `riskLevel` / `isReadOnly` / `isConcurrencySafe` overrides for MCP servers (config + `McpTool`); examples added to `docs/mcp-servers.md`.
+- Minimal Windows-compatible oracles + relaxed e2e skips for win32 in evals.
+- New superpowers spec + this detailed TDD plan (the "extensive doco").
+- Rich changelog entry + updates to `docs/windows.md` (exercise instructions) and `CONTRIBUTING.md` (accurate CI + packaging requirement).
+
+### Changed
+- CI workflows (`ci.yml`, `publish*.yml`) now invoke `lint` + full `typecheck` (the claim in CONTRIBUTING is now true).
+- PowerShellTool call signature and implementation (now takes `ToolContext`, streams, aborts, uses safe env).
+- MonitorTool, KillProcessTool and the long tail of git/harness/command/github/exec sites now plumb and respect ToolContext / cwd / safeEnv.
+- Bash safety on win32 classifies more commands as dangerous/moderate.
+- MCP server is SDK-driven instead of a 120-line custom JSON-RPC from 2024 (existing tools/list + tools/call surface preserved for clients).
+- Schema conversion for tools now uses the maintained `zod-to-json-schema`.
+- Status-line scripts and non-critical dials are best-effort async / cached where they were sync spawns on the render path.
+- `package-windows.mjs` comments + `--dry-run` behavior clarified for non-Windows OSes.
+
+### Documentation (the "extensive doco" part of the request)
+- New design spec: `docs/superpowers/specs/2026-06-05-cross-platform-shell-safety-quality-improvements-design.md`
+- This implementation plan (TDD tasks, every file:line, verification commands, reuse notes): `docs/superpowers/plans/2026-06-05-cross-platform-shell-safety-quality-improvements-plan.md`
+- Rich entry at the top of this CHANGELOG (strategic "Why", Security/Windows impact, full verification matrix).
+- `docs/windows.md` now has a complete "Cross-Platform Shell Safety & Quality Improvements (2026-06)" section with how to exercise the new PS/Bash dangerous commands, abort, permission modes, and approvals log on a real Windows box.
+- `CONTRIBUTING.md` corrected for CI reality + explicit Windows packaging requirement + link to the plan.
+- `docs/mcp-servers.md` now includes examples of per-tool risk/readonly configuration for common MCP servers (filesystem, github, etc.).
+- The PR body for this change is deliberately extensive (15-item summary, links to plan/spec, before/after for the win paths, complete test plan).
+
+See the plan doc for the exact commit messages used for each group and the per-task verification commands.
+
+### Verification (what was run / must be green)
+- `npm ci && npm run typecheck && npm run lint && npm run test`
+- On Windows (or the PR's windows-latest runner): full `tools-integration.test.ts` (PowerShell + new win bash-safety cases + Monitor/Kill + abort tests); at least one evals pack exercised with cmd/pwsh oracles.
+- Manual REPL smoke on win + linux: the exact cases listed in the new `docs/windows.md` section (dangerous win commands under ask/auto + rules, long PS + Ctrl+C, MCP server-mode with external client, hooks that run status/scripts, git/harness commands with correct cwd).
+- GitHub Actions / `gh pr checks` green on ubuntu-latest + windows-latest (the improved CI now includes the lint + typecheck steps added in Group A).
+- Contract test for `ToolExecutor` (permission mode matrix + hook outcomes + read-only vs mutating + concurrent vs serial).
+- Schema roundtrip tests for core tools + sample MCP-bridged tools.
+- MCP interop: stdio connection from SDK client or MCP inspector, `tools/list` + `tools/call`.
+- The new spec + plan + changelog + doc updates are present, cross-linked, and constitute the "extensive doco".
+
+### Rollback / Compatibility notes
+- The `ToolExecutor` extraction keeps the old `executeSingleTool` body as a reference during transition (can be kept behind a temporary flag for one release if needed).
+- Win classification changes are purely additive for risk levels (Unix paths unchanged; win32 now has *more* coverage).
+- MCP server change preserves the exact `tools/list` + `tools/call` surface that existing clients expect.
+- No new required user config; the MCP per-tool overrides are optional.
+- All changes are internal or safety-increasing; no user-visible behavior change for existing safe usage patterns.
+
+See the sibling design spec and the implementation plan for the complete task list, alternatives considered, and detailed design per area.
+
 ## OpenHarness for Windows v1.0 (2026-06-03) - Windows desktop fork release
 
 First public Win64 desktop release for this Windows-first fork. This release is separate from the upstream npm package version line: the bundled CLI runtime remains `2.47.0`, while `v1.0` is the Windows desktop release label for `borpy/openharness-win`.

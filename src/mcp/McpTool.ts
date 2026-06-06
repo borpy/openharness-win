@@ -12,11 +12,18 @@ export class McpTool implements Tool<z.ZodType> {
 
   private client: McpClient;
   private def: McpToolDef;
+  private override?: { riskLevel?: "low" | "medium" | "high"; isReadOnly?: boolean; isConcurrencySafe?: boolean };
 
-  constructor(client: McpClient, def: McpToolDef, riskLevel: "low" | "medium" | "high" = "medium") {
+  constructor(
+    client: McpClient,
+    def: McpToolDef,
+    riskLevel: "low" | "medium" | "high" = "medium",
+    override?: { riskLevel?: "low" | "medium" | "high"; isReadOnly?: boolean; isConcurrencySafe?: boolean },
+  ) {
     this.client = client;
     this.def = def;
-    this.riskLevel = riskLevel;
+    this.override = override;
+    this.riskLevel = override?.riskLevel ?? riskLevel;
     this.name = `${client.name}__${def.name}`;
     this.description = def.description ?? def.name;
 
@@ -32,10 +39,10 @@ export class McpTool implements Tool<z.ZodType> {
   }
 
   isReadOnly(_input: unknown): boolean {
-    return false;
+    return this.override?.isReadOnly ?? false;
   }
   isConcurrencySafe(_input: unknown): boolean {
-    return false;
+    return this.override?.isConcurrencySafe ?? false;
   }
 
   async call(input: Record<string, unknown>, _context: ToolContext): Promise<ToolResult> {
