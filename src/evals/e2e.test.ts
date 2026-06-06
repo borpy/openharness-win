@@ -8,6 +8,8 @@ import { RunOrchestrator } from "./orchestrator.js";
 import { loadPack } from "./pack-loader.js";
 
 // e2e tests use POSIX oracle.sh; Windows is exercised via orchestrator.test.ts unit tests.
+// TODO (2026-06 audit, plan Group D): add Windows-compatible oracles (cmd/ps1) so E2E can run on win32.
+// For now keep skip on win to avoid sh fixture issues; synthetic pack is posix-heavy.
 const SKIP_E2E = process.platform === "win32";
 
 const here = dirname(fileURLToPath(import.meta.url));
