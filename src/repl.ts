@@ -388,7 +388,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       version: 1,
       timestamp: Date.now(),
       sessionId: session.id,
-      cwd: process.cwd(),
+      cwd: cwd,
       model: currentModel || config.model || "",
       providerName: config.provider.name,
       permissionMode: config.permissionMode,
@@ -423,7 +423,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
     let scriptLine: string | null = null;
     const sl = cachedConfig?.statusLine;
     if (sl?.command) {
-      const cwd = process.cwd();
+      const cwd = (config as any).workingDir ?? process.cwd();
       if (trustSystemActive() && !isTrusted(cwd)) {
         scriptLine = null; // untrusted — silently skip; user can /trust
       } else {
@@ -1366,7 +1366,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
             if (!event.isError && isGitRepo()) {
               const rawArgs = prevTc?.args ?? "";
               const filePath = rawArgs.startsWith("$") ? null : rawArgs;
-              const hash = autoCommitAIEdits(toolName, filePath ? [filePath] : [], process.cwd());
+              const hash = autoCommitAIEdits(toolName, filePath ? [filePath] : [], cwd);
               if (hash) {
                 // Show changed files in commit message
                 let commitMsg = `git: committed ${hash}`;
@@ -1548,7 +1548,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
   void (async () => {
     try {
       const { isTrusted, trust } = await import("./harness/trust.js");
-      if (isTrusted(process.cwd())) return;
+      if (isTrusted(cwd)) return;
       const cfgWithHooks = readOhConfig();
       const hooks = cfgWithHooks?.hooks;
       if (!hooks) return;
@@ -1557,7 +1557,7 @@ export async function startREPL(config: REPLConfig): Promise<void> {
       );
       if (!hasShellHook) return;
       const answer = await renderer.askQuestion(
-        `Trust this workspace? Shell hooks are configured in ${process.cwd()}. (yes/no)`,
+        `Trust this workspace? Shell hooks are configured in ${cwd}. (yes/no)`,
       );
       if (answer.toLowerCase().startsWith("y")) {
         trust(process.cwd());
