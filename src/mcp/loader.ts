@@ -132,11 +132,15 @@ export async function loadMcpTools(opts: LoadMcpOptions = {}): Promise<Tool[]> {
 
     if (defs.length > DEFERRED_THRESHOLD) {
       for (const def of defs) {
-        tools.push(new DeferredMcpTool(client, def.name, def.description ?? "", server.riskLevel));
+        const override = server.tools?.[def.name];
+        const risk = override?.riskLevel ?? server.riskLevel;
+        tools.push(new DeferredMcpTool(client, def.name, def.description ?? "", risk, override));
       }
     } else {
       for (const def of defs) {
-        tools.push(new McpTool(client, def, server.riskLevel));
+        const override = server.tools?.[def.name];
+        const risk = override?.riskLevel ?? server.riskLevel;
+        tools.push(new McpTool(client, def, risk, override));
       }
     }
   }

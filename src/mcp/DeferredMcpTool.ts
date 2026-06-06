@@ -19,17 +19,20 @@ export class DeferredMcpTool implements Tool<z.ZodType> {
   private resolved: McpTool | null = null;
   private resolvePromise: Promise<McpTool | null> | null = null;
   private _riskLevel: "low" | "medium" | "high";
+  private _override?: { riskLevel?: "low" | "medium" | "high"; isReadOnly?: boolean; isConcurrencySafe?: boolean };
 
   constructor(
     client: McpClient,
     toolName: string,
     description: string,
     riskLevel: "low" | "medium" | "high" = "medium",
+    override?: { riskLevel?: "low" | "medium" | "high"; isReadOnly?: boolean; isConcurrencySafe?: boolean },
   ) {
     this.client = client;
     this.toolName = toolName;
-    this._riskLevel = riskLevel;
-    this.riskLevel = riskLevel;
+    this._riskLevel = override?.riskLevel ?? riskLevel;
+    this.riskLevel = this._riskLevel;
+    this._override = override;
     this.name = `${client.name}__${toolName}`;
     this.description = description || toolName;
     // Permissive schema — accepts anything until resolved
@@ -37,10 +40,10 @@ export class DeferredMcpTool implements Tool<z.ZodType> {
   }
 
   isReadOnly(_input: unknown): boolean {
-    return false;
+    return this._override?.isReadOnly ?? false;
   }
   isConcurrencySafe(_input: unknown): boolean {
-    return false;
+    return this._override?.isConcurrencySafe ?? false;
   }
 
   /** Resolve the full tool definition from the MCP server */
@@ -53,7 +56,7 @@ export class DeferredMcpTool implements Tool<z.ZodType> {
         const defs = await this.client.listTools();
         const def = defs.find((d) => d.name === this.toolName);
         if (def) {
-          this.resolved = new McpTool(this.client, def, this._riskLevel);
+          this.resolved = new McpTool(this.client, def, this._riskLevel, this._override);
           return this.resolved;
         }
         return null;
